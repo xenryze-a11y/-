@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>灰烬谷 · Ashen Vale — PixiJS + ECS demo</title>
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #10140f; }
+      #app { width: 100vw; height: 100vh; }
+      #app canvas { display: block; }
+      #boot {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: #d8c9a8; font: 15px/1.8 "Microsoft YaHei", system-ui, sans-serif;
+        background: #10140f; text-align: center; white-space: pre-line;
+      }
+      #boot.error { color: #ff9a8a; }
+    </style>
+  </head>
+  <body>
+    <div id="app"></div>
+    <div id="boot">灰烬谷 · Ashen Vale
+正在生成图集…</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

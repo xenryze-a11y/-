@@ -1,0 +1,143 @@
+# 贴图、图集与动画
+
+这套 demo 的重点就是「移动动画 + 贴图」怎么组织。全部逻辑在 `engine/art.ts`、`engine/atlas.ts`、`engine/animation.ts`、`engine/renderer.ts`。
+
+## 一、贴图命名即协议
+
+```
+<family><View><Part>      例：heroFrontBody / zombieSideHead / casterBackHead
+tile<Material>            tileGrass / tileWall / tileWallTop
+prop<Name>                propTree / propGrave / propTorch
+pickup<Kind>              pickupMana / pickupHealth
+weapon<Name>              weaponSword / weaponStaff
+shoe<Mat>[Side]           shoeLeather / shoeIronSide / shoeZombieBareSide
+part<Name>                partFoot（兜底）/ partHand / partShadow
+<fx>_NNN                  slash_000..004 / impact_000..005 / fireball_000..003
+```
+
+| 项 | 约定 |
+|---|---|
+| `family` | `hero` / `zombie` / `caster`。换皮就加一套同名前缀的贴图，代码不用改 |
+| `View` | 只有 `Front` / `Back` / `Side` **三套**。朝左 = `Side` 贴图 + 水平镜像，没有第四套、更没有 8 方向帧 |
+| `Part` | `Body`（**只画躯干 + 裤腿**，不含手臂/鞋/手）/ `Head`（头 + 兜帽或头发）。兜帽/头发必须覆盖整个头顶和额头，见 D14。**斗篷部件当前不生成**（见 [DECISIONS.md](DECISIONS.md) D13） |
+| 尺寸 | 人形部件统一 **32×48**，锚点 `(0.5, 30/48)` = 腰带行；实体世界坐标对齐这里，脚底约在 `y+17` |
+| 武器锚点 | 剑 `(0.5, 28/32)` 握把、法杖 `(0.5, 38/48)` 握把，旋转绕手 |
+| 瓦片 | 32×32，材质与通行性由同一个 `Tile` 枚举编码 |
+
+`get(name)` 查不到贴图会返回 `Texture.WHITE` 并打一条 warning，**不会崩**：换皮漏一两张时能一眼看出是哪块白了，而不是整局黑屏。
+
+> ⚠️ **`Side` 是独立画法，不是把正面裁一半**。侧视只画「朝右」一套：躯干 10px 宽（正面 14px）、后背压暗、**两腿前后错开且后腿只露一小截**；头是侧脸（鼻尖朝右、一只眼），但**兜帽/头发要和正面一样覆盖整个头顶 + 额头**（`x=9..23, y=2..11`），只露眼睛以下的右半张脸——不能只盖后脑左半，否则前额一片皮肤、看着像秃头（D14）。**不画手臂、不画靴子、不画斗篷**——它们会把侧视重新撑回正面那么宽，或者像背后挂了个方形背包。朝左由渲染层 `scale.x = -1` 镜像。
+> 早期版本让侧视复用了正面的腿、还画了同色前臂和靴子，结果「侧面能看见两条正面一样的腿」「身体和脚太大」——默认鼠标方向恰好就是 Side，一进游戏就露馅。别改回去。
+
+### 悬浮手脚（Go D43 的做法）
+
+静态贴图里**只有躯干和裤腿**，手和鞋是运行时画上去的：
+
+- `partFoot` = 6×5 的小矩形鞋，`partHand` = 6×6 的**方形像素块**（硬边、不圆滑）。都不要画成带高光的圆盘，放大后会像贴在身上的花/装甲板。
+- 脚位置由 `footPos()` 的走路相位决定，鞋底落在裤脚下沿（`RIG.soleY = 12`）；侧视再乘 0.85 缩小。
+- 手位置 = `HAND_ANCHORS[view][i]` **三档离散锚点** + `handBob()` 摆动。这是 goengine **D52 之前**的版本：过对角线时手直接跳到另一组锚点，不做 360° 连续插值（用户要的「不平滑」旧版）。D52 之后 Go 才改成 `core.HandOffset` 极坐标插值，这里刻意不跟。
+- 手臂段和腿段**根本不画**（D43：像素尺度下两段锥形像竹竿，比悬浮手脚更不像人）。武器跟着持械手（右手锚点）走。
+
+### 鞋可以换装（对应 Go 的 `art.ShoeSprite`）
+
+Go 版是 `sprShoe<Mat>[Side]`（bare / cloth / leather / iron），丧尸赤脚另按腐肉色出 `spr<Rig>ShoeBare[Side]`——**鞋是独立贴图，不画在身体里**，所以能换装。demo 用同一套接缝：
+
+- **贴图**：`shoe<Mat>` / `shoe<Mat>Side`，材质见 `game/data.ts` 的 `SHOE_MATERIALS`（bare / cloth / leather / iron / zombieBare），5 材质 × 2 视角 = 10 张，由 `engine/art.ts` 的 `drawShoe` 自动生成。
+- **数据**：`Equip.shoes`（`game/components.ts`）。渲染层每帧用 `shoeSpriteName(equip.shoes, view === 'side')` 拼名字换 texture，**换装不改任何绘制代码**。
+- **交互**：玩家按 `B` 循环切 `PLAYER_SHOES`；亡者出生时随机分配 `zombieBare`（腐肉色赤脚）或 `cloth`。HUD 显示当前鞋。
+- **加新材质**：往 `SHOE_MATERIALS` 和 `SHOE_COLORS` 各加一项即可；想让玩家能换再加进 `PLAYER_SHOES` 和 `SHOE_LABEL`。
+- ⚠️ **侧视鞋是单独一张**，有朝右的鞋头和靴筒，不能拿正视图凑合——这正是 Go 版命名里 `Side` 后缀特殊的原因（鞋子的命名不带视角前缀，而是加 `Side`）。
+- `RIG.footScale` 控制鞋大小（当前 0.66）：太小会变成两个点，太大又会盖过裤腿。
+
+## 二、图集
+
+对应 Go 引擎 `backend/atlas.go`（D40）：
+
+- 所有部件打进**一张** canvas → 一个 `TextureSource`，切出来的 `Texture` 只是 `frame` 不同，Pixi 才能批处理。
+- 行式装箱、**按高度降序**（不排序会浪费一半空间）。
+- 帧间留 **2px gutter**，等价于 Go 版 `rectUV` 的半像素内缩，防最近邻采样串到隔壁贴图。
+- `scaleMode = 'nearest'`，像素画放大 2 倍才不糊。
+- 地面/前景墙各预渲染成一张整图（2048² 级别），一个 Sprite 画完，不给 4096 个瓦片各建显示对象。
+
+### 换成真美术（推荐流程）
+
+1. 控制台执行 `__ASHEN__.dumpAtlas()`，下载 `atlas.png` + `atlas.json`。这份 JSON 就是**当前所有帧的坐标清单和命名清单**，直接当美术模板。
+2. 美术按同样名字、同样尺寸覆盖 `atlas.png`（帧之间留 ≥2px 空隙，别改名字）。
+3. 把两个文件放进 `public/assets/`。
+4. 刷新页面：启动时 `tryExternal()` 探测到 `assets/atlas.json` 就自动用外部图集，控制台会打印「使用外部美术」。
+
+`atlas.json` 格式：
+
+```json
+{
+  "meta": { "image": "atlas.png", "size": { "w": 1024, "h": 512 }, "scale": 1 },
+  "frames": {
+    "heroFrontBody": { "x": 2, "y": 2, "w": 32, "h": 48 }
+  },
+  "anims": {
+    "fireball": { "frames": ["fireball_000", "fireball_001"], "fps": 12, "loop": true, "scale": 1 }
+  }
+}
+```
+
+也兼容 Pixi 官方格式（`"name.png": { "frame": {x,y,w,h} }`），键名的 `.png` 后缀会自动去掉。`anims` 目前只是导出参考，运行时序列帧表在 `game/data.ts` 的 `FX_ANIMS`——要改帧率/帧序改那里。
+
+> ⚠️ 外部图集模式下 `dumpAtlas()` 会提示无需导出。想重新拿内置模板，先把 `public/assets/` 里的两个文件移走。
+
+## 三、走路动画（最关键的一条）
+
+**没有走路序列帧。** 角色是「3 视角静态部件贴图 + 运行时几何四肢」，脚和手是两张 8×8 小贴图，位置由连续相位算出来。
+
+```ts
+// engine/animation.ts
+WALK_STRIDE_WORLD = 26;                       // 每走 26 世界像素，相位推进 π
+moved = dist(now, last);                      // 实际位移，不是输入向量
+blend += (clamp(moved / dt / 50, 0, 1) - blend) * min(1, 14 * dt);
+phase += moved / WALK_STRIDE_WORLD * PI;
+```
+
+`footPos` / `handOffset` 用相位算：两脚沿垂直于实际移动方向分开，前后摆 `sin(phase + i*π)`，抬脚 `max(0, cos)`；手错半拍、横向摆频率减半；身体加一点 `|sin(phase)|` 起伏。
+
+**为什么相位跟位移不跟时间**（Go 版 D52 之后定下来的，踩过坑）：
+- 走快走慢脚不打滑；
+- 贴墙被挡住时 `moved = 0`，脚立刻停，不会原地踏步；
+- 以后客户端不跑模拟、只收位置快照，动画照样对；
+- `blend` 平滑过渡，起步/停步不瞬切。
+
+所以 `renderer.ts` 的 `AvatarView` 只保存 `{last, phase, blend, dir}`，**从不读输入**，也从不写回 ECS。
+
+### 骨架参数
+
+`engine/animation.ts` 的 `RIG` 有三套（hero / zombie / caster）：
+
+```ts
+interface Rig {
+  soleY, footSep[2], strideLen, liftMax, footScale,
+  handAlong, handLift, handSide, armReach, handRadius, bodyBob
+}
+```
+
+行尸是 `strideLen: 5, liftMax: 1.2`（蹭着走），玩家是 `9 / 4.5`（大步）。Go 版把这些放在 `rig/humanoid.json` 并支持热重载；这里收成常量，要外置就整体搬成 JSON，用「只覆盖写了的字段」的方式合并（别让缺字段变成 0）。
+
+### 序列帧只给特效
+
+`FX_ANIMS`（`game/data.ts`）显式列帧序，**不扫目录**；`fxFrame()` 缺帧直接抛错，否则动画「看着正常但会跳」。走路 60Hz 连续相位，特效 12~20 FPS，出手动画 0.22 秒，模拟固定 60Hz。
+
+## 四、合成顺序与深度
+
+一个角色是一个 `Container`，内部按 `LAYER` 常量排序：
+
+```
+影子(8) → 脚(9) → 身体(10) → 头(13) → 闪白层(14) → 武器(14) → 手(16) → 血条(29)
+```
+
+角色与角色之间 `zIndex = 世界 y`，脚底越靠下越后画（伪深度）。地面层在最下，**前景南墙层在最上**，把角色下半身压住，就是 Go 版「背面墙在实体之下、正面墙在实体之上」的伪 3D 做法，不用引入 Z 坐标。
+
+`renderer.ts` 里所有 Sprite **按实体池复用**，每帧只改 `x/y/texture/tint/rotation/zIndex`。别改成每帧 `new Sprite`——Pixi 的批处理会直接失效。
+
+## 五、受伤、出手、朝向的视觉细节
+
+- **闪白**：复制一张和 body 同贴图的 Sprite，`blendMode='add'`，`alpha = hurtFlash * 4`，等价于 Go 版 shader 的 `vFlash` 向白插值。
+- **出手**：`attackAnim` 从 0.22 秒倒数，进度用 ease-out `1-(1-t)²`，武器从 `aim - arc/2` 扫到 `aim + arc/2`；动画期间用 `swingAngle` 而不是当前鼠标角度，否则刀光会跟着甩。
+- **朝向**：`facingView(angle)` 用 `|cos| > |sin|` 分界，斜着走不会频繁左右翻。朝左只 `scale.x = -1`，**绝不旋转**。
+- **血条**：满血不画（一堆红条顶头上像帽子），挨打后才显示。
