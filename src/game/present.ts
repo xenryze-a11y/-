@@ -8,6 +8,7 @@ import { fxFinished, fxFrameIndex, type FxAnim } from '../engine/animation';
 import type { TextureAtlas } from '../engine/atlas';
 import type { Camera } from '../engine/camera';
 import type { GameEvent } from '../engine/ecs';
+import { BasketballVfx } from './basketball-vfx';
 import { PixelSpellVfx } from './pixel-spell-vfx';
 import type { Scene } from './spawn';
 import { FX_ANIMS } from './data';
@@ -32,6 +33,7 @@ const MAX_DECALS = 60;
 export class Presentation {
   private effects: Effect[] = [];
   private readonly pixels: PixelSpellVfx;
+  private readonly basketball: BasketballVfx;
   private readonly decals: Sprite[] = [];
 
   constructor(
@@ -41,11 +43,23 @@ export class Presentation {
     private readonly camera: Camera,
   ) {
     this.pixels = new PixelSpellVfx(fxLayer, decalLayer);
+    this.basketball = new BasketballVfx(fxLayer, atlas);
   }
 
   consume(events: GameEvent[]): void {
     for (const ev of events) {
       switch (ev.kind) {
+        case 'basketball':
+          this.basketball.consume(ev);
+          this.pixels.consume({
+            ...ev,
+            kind: 'ring',
+            color: '#ffb063',
+            amount: ev.stage === 'cast' ? 27 : ev.amount || 45,
+            life: 0.5,
+          });
+          if (ev.stage === 'impact') this.camera.shake(2, 0.16);
+          break;
         case 'ring':
         case 'bolt':
         case 'spell':
@@ -112,6 +126,7 @@ export class Presentation {
   }
 
   update(dt: number): void {
+    this.basketball.update(dt);
     for (let i = this.effects.length - 1; i >= 0; i--) {
       const e = this.effects[i];
       e.t += dt;
@@ -144,6 +159,7 @@ export class Presentation {
     }
     this.effects = [];
     this.pixels.clear();
+    this.basketball.clear();
     for (const d of this.decals) {
       this.decalLayer.removeChild(d);
       d.destroy();
@@ -154,6 +170,10 @@ export class Presentation {
   /** 只读组件投影护盾/预警；特效生命使用自己的渲染时钟。 */
   sync(scene: Scene, dt: number): void {
     this.pixels.sync(scene, dt);
+  }
+
+  get basketballStats() {
+    return this.basketball.stats;
   }
 
   get vfxStats() {

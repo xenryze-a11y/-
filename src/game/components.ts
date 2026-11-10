@@ -5,13 +5,14 @@
  */
 import type { Store, World } from '../engine/ecs';
 import type { InventoryState } from './inventory';
-import type { SkillId, ItemId } from './items';
+import type { SkillId, ItemId, AbilityId } from './items';
 import type { Vec2 } from '../engine/math';
 
 export const TAG = {
   PLAYER: 'player',
   MOB: 'mob',
   PROJECTILE: 'projectile',
+  SUMMON: 'summon',
   PROP: 'prop',
   PICKUP: 'pickup',
   /** 命中判定查 damageable 而不是 mob：木箱、墓碑也能被打。 */
@@ -32,6 +33,7 @@ export const C = {
   EQUIP: 'equip',
   INVENTORY: 'inventory',
   FIELD: 'field',
+  SUMMON: 'summon',
 } as const;
 
 export interface Radius {
@@ -46,7 +48,7 @@ export interface Health {
 export interface Facing {
   angle: number;
 }
-export type Weapon = 'sword' | 'staff';
+export type Weapon = 'sword' | 'staff' | 'basketball';
 
 export interface Player {
   weapon: Weapon;
@@ -63,7 +65,7 @@ export interface Player {
   /** 本次挥砍的朝向，动画期间不跟着鼠标转，否则刀光会甩。 */
   swingAngle: number;
   skill: SkillId;
-  cooldowns: Partial<Record<SkillId, number>>;
+  cooldowns: Partial<Record<AbilityId, number>>;
   shield: number;
   shieldHp: number;
   noManaCd: number;
@@ -118,6 +120,14 @@ export interface Pickup {
   bob: number;
 }
 
+export interface Summon {
+  owner: number;
+  target: number;
+  life: number;
+  age: number;
+  angle: number;
+}
+
 export interface SpellField {
   type: 'storm';
   r: number;
@@ -167,6 +177,7 @@ export interface Stores {
   equip: Store<Equip>;
   inventory: Store<InventoryState>;
   field: Store<SpellField>;
+  summon: Store<Summon>;
 }
 
 export function createStores(w: World): Stores {
@@ -184,5 +195,6 @@ export function createStores(w: World): Stores {
     equip: w.register<Equip>(C.EQUIP),
     inventory: w.register<InventoryState>(C.INVENTORY),
     field: w.register<SpellField>(C.FIELD),
+    summon: w.register<Summon>(C.SUMMON),
   };
 }

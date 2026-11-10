@@ -70,6 +70,7 @@ export interface GameEvent {
     | 'swing'
     | 'cast'
     | 'spell'
+    | 'basketball'
     | 'impact'
     | 'hurt'
     | 'playerHurt'

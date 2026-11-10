@@ -1,9 +1,11 @@
 /** DOM 是表现层：读取 ECS 快照，发输入/背包命令，从不直接改组件。 */
+import { footRest, handRest } from '../engine/animation';
+import { shoeSpriteName } from '../engine/art';
 import { BTN, type Input } from '../engine/input';
 import type { TextureAtlas } from '../engine/atlas';
 import type { GameEvent } from '../engine/ecs';
 import { Tile } from '../engine/level';
-import { ITEMS, SKILLS, isSkill, type ItemId } from './items';
+import { ITEMS, ABILITIES, isAbility, type ItemId } from './items';
 import {
   getSlot,
   recipe,
@@ -85,11 +87,43 @@ export class GameUI {
     }
   }
   private preview(): void {
-    const g = this.q<HTMLCanvasElement>('#av-avatar-preview').getContext('2d')!;
+    const canvas = this.q<HTMLCanvasElement>('#av-avatar-preview'),
+      g = canvas.getContext('2d')!;
+    g.clearRect(0, 0, canvas.width, canvas.height);
     g.imageSmoothingEnabled = false;
-    for (const name of ['heroFrontBody', 'heroFrontHead']) {
+    const scale = 3,
+      origin = { x: 64, y: 148 };
+    const draw = (
+      name: string,
+      x: number,
+      y: number,
+      ax: number,
+      ay: number,
+    ) => {
       const f = this.atlas.frames[name];
-      g.drawImage(this.atlas.canvas, f.x, f.y, f.w, f.h, 8, 3, 48, 72);
+      g.drawImage(
+        this.atlas.canvas,
+        f.x,
+        f.y,
+        f.w,
+        f.h,
+        origin.x + (x - f.w * ax) * scale,
+        origin.y + (y - f.h * ay) * scale,
+        f.w * scale,
+        f.h * scale,
+      );
+    };
+    draw('heroFrontBody', 0, -12, 0.5, 30 / 48);
+    const shoes =
+      this.context().s.equip.get(this.context().player)?.shoes || 'bare';
+    for (let i = 0; i < 2; i++) {
+      const foot = footRest('front', i, false);
+      draw(shoeSpriteName(shoes, false), foot.x, foot.y, 0.5, 13 / 14);
+    }
+    draw('heroFrontHead', 0, -12, 0.5, 30 / 48);
+    for (let i = 0; i < 2; i++) {
+      const hand = handRest('front', i, false);
+      draw('partHand', hand.x, hand.y - 12, 0.5, 0.5);
     }
   }
   toast(message: string): void {
@@ -134,7 +168,7 @@ export class GameUI {
     this.setInventory(false);
     this.setMenu(false);
     this.lastRevision = -1;
-    this.toast('E 打开背包 · 1–5 选择法杖 · 右键释放特殊技能');
+    this.toast('E 打开背包 · 1–5 法杖 · 9 篮球召唤 · 右键释放特殊技能');
   }
   private setHelp(open: boolean): void {
     this.helpOpen = open;
@@ -156,6 +190,7 @@ export class GameUI {
     return `<button class="av-slot ${hotbar && selected ? 'active' : ''}" data-slot="${index}" aria-label="${label}" ${hotbar ? 'aria-pressed="' + selected + '"' : ''}>${item ? `<img draggable="false" src="${this.icons[item.id]}" alt="">${item.count > 1 ? `<span class="av-count">${item.count}</span>` : ''}` : ''}${index < 9 ? `<span class="av-key">${index + 1}</span>` : ''}</button>`;
   }
   renderInventory(): void {
+    this.preview();
     const inv = this.inventory;
     this.q('#av-hotbar').innerHTML = inv.slots
       .slice(0, 9)
@@ -426,11 +461,12 @@ export class GameUI {
     ).padStart(2, '0');
     const selected = this.inventory.slots[this.inventory.selected],
       item = selected ? ITEMS[selected.id] : null,
-      skill = selected && isSkill(selected.id) ? SKILLS[selected.id] : null;
+      skill =
+        selected && isAbility(selected.id) ? ABILITIES[selected.id] : null;
     this.q('#av-selected-name').textContent = item?.name || '空物品格';
     this.q('#av-selected-name').style.color = item?.color || '#d4d6bc';
     const cd =
-      selected && isSkill(selected.id) ? p.cooldowns[selected.id] || 0 : 0;
+      selected && isAbility(selected.id) ? p.cooldowns[selected.id] || 0 : 0;
     this.q('#av-skill').textContent = skill
       ? `右键 / F · ${skill.name} | ${skill.cost} 法力 | ${cd > 0 ? cd.toFixed(1) + ' 秒后就绪' : '已就绪'}`
       : item?.kind === 'sword'
@@ -450,8 +486,9 @@ export class GameUI {
       '[data-slot]',
     )) {
       const entry = this.inventory.slots[Number(slot.dataset.slot)],
-        cooldown = entry && isSkill(entry.id) ? p.cooldowns[entry.id] || 0 : 0,
-        total = entry && isSkill(entry.id) ? SKILLS[entry.id].cd : 1;
+        cooldown =
+          entry && isAbility(entry.id) ? p.cooldowns[entry.id] || 0 : 0,
+        total = entry && isAbility(entry.id) ? ABILITIES[entry.id].cd : 1;
       let overlay = slot.querySelector<HTMLElement>('.av-cd');
       if (cooldown > 0) {
         if (!overlay) {

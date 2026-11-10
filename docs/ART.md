@@ -34,7 +34,7 @@ part<Name>                partFoot（兜底）/ partHand / partShadow
 静态贴图里**只有躯干和裤腿**，手和鞋是运行时画上去的：
 
 - `partFoot` = 6×5 的小矩形鞋，`partHand` = 6×6 的**方形像素块**（硬边、不圆滑）。都不要画成带高光的圆盘，放大后会像贴在身上的花/装甲板。
-- 脚位置由 `footPos()` 的走路相位决定，鞋底落在裤脚下沿（`RIG.soleY = 12`）；侧视再乘 0.85 缩小。
+- 脚位置由 `footPos()` 的走路相位决定，鞋底落在裤脚下沿（`RIG.soleY = 12`）；鞋贴图 12×14，以 `13/14` 鞋底锚点落地，侧视不再额外缩小。
 - 手位置 = `HAND_ANCHORS[view][i]` **三档离散锚点** + `handBob()` 摆动。这是 goengine **D52 之前**的版本：过对角线时手直接跳到另一组锚点，不做 360° 连续插值（用户要的「不平滑」旧版）。D52 之后 Go 才改成 `core.HandOffset` 极坐标插值，这里刻意不跟。
 - 手臂段和腿段**根本不画**（D43：像素尺度下两段锥形像竹竿，比悬浮手脚更不像人）。武器跟着持械手（右手锚点）走。
 
@@ -47,7 +47,7 @@ Go 版是 `sprShoe<Mat>[Side]`（bare / cloth / leather / iron），丧尸赤脚
 - **交互**：玩家在背包靴子位换装；亡者出生时随机分配 `zombieBare`（腐肉色赤脚）或 `cloth`。HUD 显示当前鞋。
 - **加新材质**：往 `SHOE_MATERIALS` 和 `SHOE_COLORS` 各加一项即可；想让玩家能换再加进 `PLAYER_SHOES` 和 `SHOE_LABEL`。
 - ⚠️ **侧视鞋是单独一张**，有朝右的鞋头和靴筒，不能拿正视图凑合——这正是 Go 版命名里 `Side` 后缀特殊的原因（鞋子的命名不带视角前缀，而是加 `Side`）。
-- `RIG.footScale` 控制鞋大小（当前 0.66）：太小会变成两个点，太大又会盖过裤腿。
+- `RIG.footScale` 控制鞋大小（当前 1）：太小会变成两个点，太大又会盖过裤腿。
 
 ## 二、图集
 
@@ -86,7 +86,7 @@ Go 版是 `sprShoe<Mat>[Side]`（bare / cloth / leather / iron），丧尸赤脚
 
 ## 三、走路动画（最关键的一条）
 
-**没有走路序列帧。** 角色是「3 视角静态部件贴图 + 运行时几何四肢」，脚和手是两张 8×8 小贴图，位置由连续相位算出来。
+**没有走路序列帧。** 角色是「3 视角静态部件贴图 + 运行时几何四肢」，鞋是 12×14、手是 8×8 独立贴图，位置由连续相位算出来。
 
 ```ts
 // engine/animation.ts
@@ -96,7 +96,7 @@ blend += (clamp(moved / dt / 50, 0, 1) - blend) * min(1, 14 * dt);
 phase += moved / WALK_STRIDE_WORLD * PI;
 ```
 
-`footPos` / `handOffset` 用相位算：两脚沿垂直于实际移动方向分开，前后摆 `sin(phase + i*π)`，抬脚 `max(0, cos)`；手错半拍、横向摆频率减半；身体加一点 `|sin(phase)|` 起伏。
+`footPos` 先按当前视角取 `FOOT_ANCHORS` 对齐裤脚，再用实际位移推进的相位叠加小幅前后摆与抬脚；`handBob` 使用三档手位和较小摆幅，身体轻微起伏。不能再沿上次移动方向重排静止双脚（D22）。
 
 **为什么相位跟位移不跟时间**（Go 版 D52 之后定下来的，踩过坑）：
 - 走快走慢脚不打滑；
@@ -112,12 +112,12 @@ phase += moved / WALK_STRIDE_WORLD * PI;
 
 ```ts
 interface Rig {
-  soleY, footSep[2], strideLen, liftMax, footScale,
+  soleY, strideLen, liftMax, footScale,
   handAlong, handLift, handSide, armReach, handRadius, bodyBob
 }
 ```
 
-行尸是 `strideLen: 5, liftMax: 1.2`（蹭着走），玩家是 `9 / 4.5`（大步）。Go 版把这些放在 `rig/humanoid.json` 并支持热重载；这里收成常量，要外置就整体搬成 JSON，用「只覆盖写了的字段」的方式合并（别让缺字段变成 0）。
+行尸是 `strideLen: 1.8, liftMax: 0.8`（蹭着走），玩家是 `2.8 / 1.6`（大步）。Go 版把这些放在 `rig/humanoid.json` 并支持热重载；这里收成常量，要外置就整体搬成 JSON，用「只覆盖写了的字段」的方式合并（别让缺字段变成 0）。
 
 ### 序列帧只给特效
 
@@ -162,3 +162,12 @@ interface Rig {
 `PixelSpellVfx` 只读 Scene 并消费标量 `spell / ring / bolt` 事件。地面法阵进 decalLayer，粒子、结晶和闪电进 fxLayer；所有笔触使用 2×2 世界像素方块，不用平滑描边、模糊滤镜。投射物拖尾按实际位移采样。上限为 480 粒子、48 个 burst、32 条 bolt，超限回收最旧项；重开清空特效及位置缓存，暂停不推进表现时钟。
 
 `spell-visuals.ts` 记录表现配色、容量、15 FPS 分段时钟和关键帧。`sampleVisualTrack` 区间采样与 `LEGACY_HALO` 的 26 帧光环时序迁自可确认的旧《圣剑联盟》源码，详见 [来源说明](../src/game/assets/README.md)。它们不参与伤害、冷却或模拟 RNG；不能在特效更新里扣血或写组件。外部图集必须同时匹配帧名与尺寸，旧 32×48 法杖图集不能套用新握把。
+
+
+## 手脚与装备对位（D22）
+
+`FOOT_ANCHORS` 按静态裤脚中心记录 front / back / side 两个落脚点。`footPos` 在锚点上叠加小幅步态，不能再沿上一次移动向量旋转双脚；原地转身时鞋子也必须换到当前视角。鞋保持原尺寸，鞋底锚点 Y=13/14；侧视 X=4.5/12 对齐靴筒，前 / 背视 X=1/2。近侧鞋放在 body 之上覆盖裤腿，侧视远脚保留在身后。
+
+手掌取消 0.65 缩放，使用六像素宽的手掌与袖口，三档锚点的内侧与躯干相接；摆幅收小，持械手盖住武器握点。背包的 128×160 CPU 角色预览复用 `footRest / handRest / shoeSpriteName`，每次 inventory revision 更新真实鞋材质，不能只画一次身体后永远保留开局皮靴。
+
+篮球素材：`summon_0..5` 是 48×48、透明、脚底锚点的用户视频切帧，按原始非等间隔时长循环；世界缩放 0.66，使召唤物约为玩家身高一半。`kunGlyph` 是新生成原稿归一化后的 32×32 像素“坤”字，每次爆炸散开 18 枚，复用最多 160 个 Sprite。所有帧在上传 GPU 前合入同一图集，来源见 [SUMMON.md](SUMMON.md)。

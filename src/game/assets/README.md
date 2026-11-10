@@ -14,3 +14,8 @@
 - [src/native-effects.js](https://github.com/xenryze-a11y/demo/blob/02856f09415250282da81b005fa3c9c333e0e36c/src/native-effects.js) 的 `skill20101_add / sgskill_h`：26 帧循环，frame 0→25 缩放 0.8→1.1、透明度 255→0。适配为 `LEGACY_HALO`，用于雷暴呼吸环及扩散环透明度；本游戏重新绘制符文和像素形状。
 
 没有复制旧项目的角色图片、技能图片或整套战斗系统。用户描述的“魔女主角、四方向行走、技能切图”的 RPG 尚未在目前可访问的仓库 / 分支中确认；不把上述《圣剑联盟》误标为该游戏。
+
+
+## 篮球召唤素材
+
+`summon-dance.png` 来自用户本轮上传视频的一个完整循环，六帧透明切片；`kun-generated.png` 为本轮按用户要求新生成的像素“坤”字原稿。切帧时间、命令、来源哈希与游戏播放约定见 [docs/SUMMON.md](../../../docs/SUMMON.md)。两者用 `?inline` 内嵌并合入同一图集，不加载视频、不播放录屏音轨。

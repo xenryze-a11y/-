@@ -1,6 +1,18 @@
 import { test } from 'node:test';
 import { LEGACY_HALO, sampleVisualTrack } from '../src/game/spell-visuals';
-import { SKILL_IDS } from '../src/game/items';
+import { SKILL_IDS, BASKETBALL, BASKETBALL_SKILL } from '../src/game/items';
+import {
+  footPos,
+  handRest,
+  RIG,
+  newLimbPose,
+  updateWalk,
+} from '../src/engine/animation';
+import {
+  SUMMON_ANIMATION,
+  summonFrameAt,
+} from '../src/game/basketball-content';
+import { updateSummons } from '../src/game/systems/basketball';
 import assert from 'node:assert/strict';
 import { Camera } from '../src/engine/camera';
 import { Level, Tile } from '../src/engine/level';
@@ -412,4 +424,140 @@ test('projectile impacts retain the caster element and finish through deferred d
     c.world.flush();
     assert.equal(c.s.projectile.get(id), undefined);
   }
+});
+
+test('feet attach to the selected view rather than the previous movement vector', () => {
+  const pose = newLimbPose();
+  const directions = [
+    { x: 1, y: 0 },
+    { x: 0, y: 1 },
+    { x: -1, y: 0 },
+    { x: 0, y: -1 },
+  ];
+  for (const view of ['front', 'back', 'side'] as const)
+    for (let i = 0; i < 2; i++) {
+      const rest = footPos(pose, RIG.hero, i, view, false);
+      for (const dir of directions) {
+        pose.dir = dir;
+        assert.deepEqual(footPos(pose, RIG.hero, i, view, false), rest);
+      }
+      const mirrored = footPos(pose, RIG.hero, i, view, true);
+      assert.equal(mirrored.x, -rest.x);
+      assert.ok(Math.abs(handRest(view, i, false).x) <= 8);
+    }
+  updateWalk(pose, 600, 600, 1 / 60);
+  const phase = pose.phase;
+  updateWalk(pose, 600, 600, 1 / 60);
+  assert.equal(pose.phase, phase);
+  updateWalk(pose, 604, 600, 1 / 60);
+  assert.ok(pose.phase > phase);
+  for (let i = 0; i < 2; i++) {
+    const foot = footPos(pose, RIG.hero, i, 'front', false);
+    assert.ok(Math.abs(foot.x - [-3, 4][i]) <= 2.8);
+  }
+});
+test('six video poses keep their measured frame durations across the exact loop boundary', () => {
+  let time = 0;
+  for (let i = 0; i < 6; i++) {
+    assert.equal(summonFrameAt(time + SUMMON_ANIMATION.durations[i] / 2), i);
+    time += SUMMON_ANIMATION.durations[i];
+  }
+  assert.ok(Math.abs(time - 0.366133) < 1e-9);
+  assert.equal(summonFrameAt(time + 1e-8), 0);
+  assert.equal(summonFrameAt(-0.001), 5);
+  assert.equal(summonFrameAt(time * 20 + 0.1), summonFrameAt(0.1));
+});
+test('basketball summons exactly five, shares left/right cooldown and preserves mana on rejection', () => {
+  const c = arena();
+  select(c, 8);
+  assert.equal(player(c).weapon, 'basketball');
+  const before = player(c).mana;
+  castSelected(c);
+  assert.equal(c.s.summon.length, 5);
+  assert.equal(player(c).mana, before - BASKETBALL_SKILL.cost);
+  castSelected(c, true);
+  assert.equal(c.s.summon.length, 5);
+  assert.equal(player(c).mana, before - BASKETBALL_SKILL.cost);
+  select(c, 0);
+  select(c, 8);
+  castSelected(c);
+  assert.equal(c.s.summon.length, 5);
+  for (let i = 0; i < 2; i++) {
+    player(c).cooldowns.basketball = 0;
+    player(c).mana = 100;
+    castSelected(c);
+  }
+  assert.equal(c.s.summon.length, BASKETBALL.maxActive);
+  player(c).cooldowns.basketball = 0;
+  const mana = player(c).mana;
+  castSelected(c);
+  assert.equal(player(c).mana, mana);
+  const d = arena();
+  select(d, 8);
+  player(d).mana = 0;
+  castSelected(d);
+  assert.equal(d.s.summon.length, 0);
+});
+test('homing summons follow a target and explode exactly once per entity with real area damage', () => {
+  const c = arena(),
+    enemy = mob(c, 735, 630, 1000);
+  select(c, 8);
+  castSelected(c);
+  c.world.drain();
+  for (let i = 0; i < 120; i++) {
+    updateSummons(c, 1 / 60);
+    c.world.flush();
+  }
+  assert.equal(c.s.summon.length, 0);
+  assert.equal(
+    c.s.health.get(enemy)!.hp,
+    1000 - BASKETBALL.count * BASKETBALL.damage,
+  );
+  const bursts = c.world
+    .drain()
+    .filter((e) => e.kind === 'basketball' && e.stage === 'impact');
+  assert.equal(bursts.length, 5);
+  assert.ok(bursts.every((e) => e.x > 680 && e.y > 600));
+});
+test('summons sweep against walls and their explosions cannot damage through the same wall', () => {
+  const c = arena();
+  for (let y = 0; y < c.level.h; y++)
+    c.level.tiles[y * c.level.w + 20] = Tile.WALL;
+  const enemy = mob(c, 660, 600, 1000);
+  c.s.facing.get(c.player)!.angle = 0;
+  select(c, 8);
+  castSelected(c);
+  c.world.drain();
+  updateSummons(c, 1);
+  const bursts = c.world
+    .drain()
+    .filter((e) => e.kind === 'basketball' && e.stage === 'impact');
+  assert.equal(bursts.length, 5);
+  assert.ok(bursts.every((e) => e.x < 640));
+  assert.equal(c.s.health.get(enemy)!.hp, 1000);
+  assert.equal(c.s.summon.length, 5);
+  assert.ok(c.s.summon.owners.every((id) => c.world.isPendingDeath(id)));
+  c.world.flush();
+  assert.equal(c.s.summon.length, 0);
+});
+test('summons reselect after a target disappears, serialize without browser state, and expire', () => {
+  const c = arena(),
+    first = mob(c, 740, 600),
+    second = mob(c, 760, 650, 1000);
+  select(c, 8);
+  castSelected(c);
+  c.world.destroy(first);
+  c.world.flush();
+  updateSummons(c, 0.2);
+  assert.ok(c.s.summon.data.every((s) => s.target === second));
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(c.s.summon.data)),
+    c.s.summon.data,
+  );
+  c.world.destroy(second);
+  c.world.flush();
+  updateSummons(c, 3);
+  assert.ok(c.s.summon.owners.every((id) => c.world.isPendingDeath(id)));
+  c.world.flush();
+  assert.equal(c.s.summon.length, 0);
 });

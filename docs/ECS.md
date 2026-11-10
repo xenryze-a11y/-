@@ -63,6 +63,8 @@ app.ticker (真实 dt)
            tickTimers      冷却、动画计时、无敌帧、回蓝
            updateAI        索敌 / 追击 / 分离 / 近战
            updateProjectiles  移动 / 撞墙 / 命中 / 爆炸
+           updateFields    雷暴生命周期 / 周期伤害
+           updateSummons   篮球召唤追击 / 扫掠 / 引爆
            updateRules     拾取 / 补怪
            world.flush()   统一删除
      └─ present.consume(world.drain())  // 事件每帧只 Drain 一次
@@ -126,3 +128,8 @@ updatePoison(ctx, fixed);
 - 菜单、背包、手册暂停整个固定步长链，并清空输入边沿及触控轴，避免恢复时补打或继续冲刺。
 
 `npm test` 覆盖堆栈守恒、满包不吞物、合成扣料、装备减伤、墙体视线、投射物扫掠、技能冷却 / 护盾 / 冰冻 / 闪烁、场生命周期与 AI 绕墙。
+
+
+## 篮球召唤组件
+
+`Summon = {owner,target,life,age,angle}` 注册在 `s.summon`，新实体带 `TAG.SUMMON`，显示信息仍在 Look。`systems/basketball.ts` 在 fields 之后、rules / flush 之前推进：索敌与转向 → 4 像素分段移动 → 撞墙 / 命中 / 到期范围伤害 → 标量 basketball 事件 → destroy 排队。没有 DOM、Pixi、视频对象或定时回调。角色视频帧与生成字粒子的时钟只在表现层；左右键共享 `player.cooldowns.basketball`。
