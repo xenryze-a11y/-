@@ -49,7 +49,7 @@ npm run dev        # http://127.0.0.1:5173
 
 | 内容 | 放哪 |
 |---|---|
-| 数值、刷怪数、材质清单 | `game/data.ts`（**内容即数据**，别硬编码进逻辑） |
+| 数值、刷怪数、材质清单 | `game/data.ts` / `game/items.ts`（**内容即数据**，别硬编码进逻辑） |
 | 规则（判定、冷却、AI） | `src/game/systems/` 或 `src/engine/` 的通用部分 |
 | 表现（特效、HUD、配色） | `src/game/` |
 | 机制（碰撞、存储、相机数学） | `src/engine/` |
@@ -57,7 +57,7 @@ npm run dev        # http://127.0.0.1:5173
 ## 改完自检
 
 ```bash
-npm run typecheck && npm run build
+npm run typecheck && npm test && npm run build && npm run build:standalone
 ```
 
 然后：

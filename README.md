@@ -1,12 +1,23 @@
-# 灰烬谷 · Ashen Vale
+# 灰烬谷 II · Ashen Vale
 
-一个能直接跑、能直接改的中世纪生存 demo：**TypeScript + PixiJS 8 + 自定义 ECS**，俯视 2D，移动/朝向/贴图/动画/战斗/AI 都是完整逻辑，不是静态展示。
+一个能直接跑、能继续共创的中世纪生存游戏：**TypeScript + PixiJS 8 + 自定义 ECS**，俯视 2D，移动/朝向/贴图/动画/战斗/AI 都是完整逻辑，不是静态展示。
 
-题材是《僵尸毁灭工程》的体验借鉴，但换成中世纪：**没有枪支**，武器是长剑与法杖，法术是火球与暗影弹，敌人是行尸、疾行者和亡灵法师。
+题材是《僵尸毁灭工程》的体验借鉴，但换成中世纪：**没有枪支**，武器是长剑与法杖，五系法杖涵盖余烬、冰霜、雷电、护盾与相位闪烁，敌人是行尸、疾行者和亡灵法师。
 
 架构照搬 `D:/go/goengine` 的模拟/表现分层与动画方案，逐项对照见 [docs/MAPPING.md](docs/MAPPING.md)。**这是独立项目**：放在 `D:/go/ashen-vale`，与 `goengine` 并列，没有改动 Go 仓库一个字节，Go 引擎后续怎么更新都不影响它。
 
 ![运行画面](docs/screenshot.png)
+
+## 增强版与直接游玩
+
+- 墙和角色共用脚底深度排序，挡住玩家的局部墙体 / 树冠淡出；地形、部件和法术继续由代码绘制，不使用生图。
+- 36 格背包 = 27 格存储 + 9 格快捷栏；支持 64 堆叠、交换、拆分、Shift 快移、Q 丢弃、靴子装备及 2×2 合成。
+- 五根法杖具有独立特殊技冷却，覆盖爆裂火球、冰冻新星、连锁闪电 / 雷暴、护盾、穿刺秘矢 / 遇墙停止的闪烁。
+- 怪物有绕墙寻路、攻击前摇、冻结 / 减速与两段式分离；近战、投射物和范围伤害遵守同一套墙体视线。
+- 开始菜单、暂停、触控摇杆和手机横 / 竖屏背包。打开背包或手册会暂停模拟；尚未加入存档和联机。
+
+只想玩：下载仓库中的 [直接可以玩的 .HTML](直接可以玩的%20.HTML)，保存后用支持 WebGL 的浏览器打开。
+`灰烬谷-AshenVale-单文件版 (1).html` 保留为上传的原始参考；增强版从 TypeScript 源码自动构建，**不再手改压缩包里的变量或覆盖原型**。
 
 ## 新来的？先看这里
 
@@ -31,6 +42,9 @@ npm run dev        # http://127.0.0.1:5173
 | 命令 | 作用 |
 |---|---|
 | `npm run dev` | 开发服务器，改代码热更新 |
+| `npm test` | 无浏览器的模拟回归（背包、合成、碰撞、技能、AI） |
+| `npm run build:standalone` | 构建离线单文件到 `dist-standalone/index.html` |
+| `npm run export:standalone` | 构建并更新仓库根目录的可玩 HTML |
 | `npm run typecheck` | 只做 TS 类型检查 |
 | `npm run build` | 类型检查 + 生产构建到 `dist/` |
 | `npm run preview` | 预览构建产物 |
@@ -41,15 +55,22 @@ npm run dev        # http://127.0.0.1:5173
 
 | 输入 | 动作 |
 |---|---|
-| `WASD` / 方向键 | 移动（8 向连续向量，斜向不加速） |
-| 鼠标 | 瞄准（身体朝鼠标，脚下方向由实际位移决定） |
-| 左键（可按住） | 当前武器普攻：剑 = 130° 扇形挥砍；法杖 = 火球（范围爆炸） |
-| 右键 | 特殊技：剑 = 360° 旋风斩；法杖 = 三连火球（耗蓝更多） |
-| `空格` | 翻滚，带无敌帧和冷却 |
-| `1` / `2` | 换长剑 / 法杖 |
-| `B` | 循环换鞋：赤脚 / 布鞋 / 皮靴 / 铁靴（换装接缝示例） |
-| `R` | 重开一局（换一张种子地图） |
-| `F3` | 调试信息（FPS / 实体数 / 模拟时间 / 坐标） |
+| `WASD` / 方向键 | 移动（斜向不加速，触控半推线性慢走） |
+| 鼠标 | 瞄准；未主动瞄准时移动方向决定面向 |
+| 左键（可按住） | 使用选中武器 / 药水；材料不当作武器 |
+| 右键 / `F` | 当前法杖特殊技或长剑旋风斩 |
+| `空格` | 翻滚；静止时沿面向翻滚，带无敌帧和冷却 |
+| `1–9` / 滚轮 | 选择 9 格快捷栏 |
+| `E` / `Tab` / `B` | 打开 / 关闭背包与 2×2 合成（暂停战斗） |
+| `X` | 使用当前药水 / 补给箱；满血 / 满蓝不消耗 |
+| `Q` | 丢下选中物品一个，短时间内不自动捡回 |
+| `Esc` / `H` | 暂停 / 操作与配方手册 |
+| `R` | 死亡后重开；菜单「重新启程」会重置地图和背包 |
+| `F3` | 调试信息 |
+
+背包：左键拿起 / 放下 / 交换，右键取半 / 放一个，Shift 快移；触屏可开启「拆分模式」和「快速移动」。铁靴需要放入靴子装备位。
+
+配方：一格古木 → 四木板；四格木板 → 一补给箱；两格月露草 → 一生命药水；一格月露草 + 一格魔晶 → 两法力药水。
 
 控制台里 `__ASHEN__.dumpAtlas()` 会下载 `atlas.png` + `atlas.json`；`__ASHEN__.world` / `.scene` / `.ctx` 可以直接查 ECS 状态。
 
@@ -76,8 +97,11 @@ src/
     spawn.ts              建世界：地图 / 玩家 / 亡者 / 物件
     components.ts         组件与标签定义
     present.ts            事件 → 特效 / 飘字 / 震屏
-    hud.ts                血条 / 法力 / 准星 / 提示
-    systems/              context / control / timers / ai / combat / projectile / rules
+    items.ts              物品 / 技能 / 合成相关内容与数值
+    inventory.ts          纯数据背包、格子命令、堆叠、合成、装备
+    ui.ts / ui.css        菜单 / 背包 / HUD / 触控（只读 ECS、发命令）
+    art-upgrade.ts        增强像素细节、道具 / 法术 / 墙体帧
+    systems/              context / control / timers / ai / combat / projectile / magic / loot / rules
 docs/
   ONBOARDING.md           5 分钟上手（第一次来读这个）
   DECISIONS.md            决策记录 / 防回退清单（为什么这么设计）
@@ -105,6 +129,7 @@ AGENTS.md                  AI 协作入口：改之前先读的一页
 | 加一种敌人行为 | `data.ts` 加配置 → `spawn.ts` 里 `addMob` → `systems/ai.ts` 加分支 |
 | 加一个组件 | `game/components.ts`（见 [docs/ECS.md](docs/ECS.md)） |
 | 加一个系统 | `src/game/systems/` 新建文件，在 `main.ts` 的系统链里插一行 |
+| 加物品 / 合成配方 | `game/items.ts` / `inventory.ts` / `systems/loot.ts` |
 | 换武器 / 加技能 | `systems/control.ts`（输入分支）+ `combat.ts`（判定）+ `data.ts`（数值） |
 | 换贴图 / 换成真美术 | [docs/ART.md](docs/ART.md)，或 `__ASHEN__.dumpAtlas()` 导出模板 |
 | 加一种鞋 / 装备材质 | `data.ts` 的 `SHOE_MATERIALS` + `art.ts` 的 `SHOE_COLORS`（见 [docs/ART.md](docs/ART.md)） |
@@ -115,8 +140,8 @@ AGENTS.md                  AI 协作入口：改之前先读的一页
 ## 已知边界
 
 - 单机 demo，没有存档、联机、服务端权威；但分层是按「以后能接」留的（输入可序列化、事件单向、表现层不写回）。
-- 地图、美术都是程序化生成的占位品质，重点是逻辑和接缝，不是美术。
+- 地图与美术仍采用程序化像素风；增强版提升细节、配色与光影，保持零外部素材依赖。
 - Pixi 版刻意**复用显示对象**（Go 版每帧重建绘制指令），所以渲染层有视图池，别改成每帧 new Sprite。
-- `public/assets/` 目前是空的；放进去 `atlas.png` + `atlas.json` 会自动覆盖内置美术。
+- `public/assets/` 目前是空的；放入完整 `atlas.png` + `atlas.json` 后，用 `?externalAtlas` 显式启用。缺少新版帧时整套回退，避免白块；默认不探测外部素材，离线无额外请求。
 
 上手路径：[docs/ONBOARDING.md](docs/ONBOARDING.md) → [docs/DECISIONS.md](docs/DECISIONS.md) → [docs/ECS.md](docs/ECS.md) / [docs/ART.md](docs/ART.md) / [docs/MAPPING.md](docs/MAPPING.md)。

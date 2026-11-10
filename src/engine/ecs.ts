@@ -76,13 +76,20 @@ export interface GameEvent {
     | 'dodge'
     | 'noMana'
     | 'spawn'
-    | 'pickup';
+    | 'pickup'
+    | 'notice'
+    | 'ring'
+    | 'bolt';
   entity?: Entity;
   x: number;
   y: number;
   angle?: number;
   amount?: number;
   text?: string;
+  color?: string;
+  life?: number;
+  x2?: number;
+  y2?: number;
 }
 
 /**

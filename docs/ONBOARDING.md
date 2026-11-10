@@ -13,7 +13,7 @@ npm run dev
 
 打开 `http://127.0.0.1:5173`。看到一片中世纪地图、蓝色法袍的法师、几只亡者 = 成功。
 
-零美术依赖，不用下载素材。**按键表在 [README.md](../README.md)「操作」**：WASD 移动、鼠标瞄准、左键攻击、右键特殊技、空格翻滚、`1`/`2` 换武器、`B` 换鞋、`R` 重开、`F3` 调试。
+零美术依赖，不用下载素材。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，X 用药，Q 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「重新启程」重置背包与地图。
 
 ## 1. 改一个数值（30 秒）
 
@@ -25,19 +25,13 @@ npm run dev
 
 ## 2. 改一个系统行为（1 分钟）
 
-打开 [`src/game/systems/ai.ts`](../src/game/systems/ai.ts)，找到 `lunge` 那段：
+打开 [`src/game/items.ts`](../src/game/items.ts) 的 `SKILLS.frost.cd`，把 `4.5` 临时改成 `2`。选择第 2 格霜晶杖，右键新星的冷却会明显更短。体验后改回去。
 
-```ts
-if (m.think > 0 && m.think < 0.28 && d < m.aggro) speed *= 2.3;
-```
-
-把 `2.3` 改成 `4`，保存。疾行者冲刺会明显更凶。
-
-**这说明**：AI 是普通函数 `(ctx, dt) => void`，遍历 `Store` 原地改，没有框架魔法。系统链在 [`src/main.ts`](../src/main.ts) 里，一眼能看全。
+**这说明**：物品 / 法杖内容在 `items.ts`，技能判定在 `systems/magic.ts`，计时推进在 `timers.ts`。新系统仍不能插到攻击判定之前。
 
 ## 3. 摸一下换装接缝（30 秒）
 
-游戏里按 **`B`**：脚上的鞋在 赤脚 / 布鞋 / 皮靴 / 铁靴 之间循环，HUD 会显示当前鞋。
+游戏里按 **`E`**，点击背包里的铁靴，再点击角色旁边的靴子装备位。手里的皮靴可以放回空格。快捷栏与背包共用一份 inventory Store。
 
 然后打开 [`src/engine/art.ts`](../src/engine/art.ts) 的 `SHOE_COLORS`，把 `iron` 的 `mid` 从 `P.iron` 改成 `'#ff00ff'`，保存 → 铁靴变成品红色。
 
@@ -56,7 +50,7 @@ if (m.think > 0 && m.think < 0.28 && d < m.aggro) speed *= 2.3;
 ## 改完自检
 
 ```bash
-npm run typecheck && npm run build
+npm run typecheck && npm test && npm run build && npm run build:standalone
 ```
 
 - 改了渲染 / 动画 / 贴图 → **必须打开画面看**，编译通过不代表画对了。
@@ -103,3 +97,10 @@ npm run typecheck && npm run build
 | [ART.md](ART.md) | 贴图、图集、动画、换装 |
 | [MAPPING.md](MAPPING.md) | 和 Go 引擎对照、Go 后续更新怎么跟进 |
 | [../AGENTS.md](../AGENTS.md) | 用 AI 辅助开发时的第一入口（五条不能破） |
+
+
+## 发给共创者或朋友
+
+`npm run export:standalone` 从当前源码更新根目录「直接可以玩的 .HTML」。不要继续修改上传的历史单文件，也不要复制整包 Pixi 到 src。外部美术需要完整匹配当前图集，并通过 `?externalAtlas` 显式启用。
+
+新入口：`items.ts`（内容）→ `inventory.ts` / `systems/magic.ts` / `loot.ts`（规则）→ `ui.ts` / `present.ts`（只读表现）。读 D15–D19 了解增强版的取舍。

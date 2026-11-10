@@ -1,63 +1,78 @@
-/**
- * 投射物：移动 → 撞墙 / 命中 → 火球范围爆炸。
- * 对应 goengine 的 engine/sim/combat.go UpdateProjectiles。
- * 撞墙用 r=0 的地形查询：绕过场景物，避免树把伤害吞掉。
- */
-import { TAG } from '../components';
-import { CFG } from '../data';
+/** 分段扫掠防止高速秘矢穿墙；碰撞与爆炸均使用同一套地形视线。 */
+import { dist, type Vec2 } from '../../engine/math';
+import { TAG, type Projectile } from '../components';
+import { MAGIC, ITEMS } from '../items';
 import { applyDamage } from './combat';
+import { circleHit, emitRing } from './magic';
 import type { Ctx } from './context';
 
 export function updateProjectiles(ctx: Ctx, dt: number): void {
-  ctx.s.projectile.forEach((e, pr) => {
-    if (ctx.world.isPendingDeath(e)) return;
-    pr.life -= dt;
-    const p = ctx.world.pos(e);
-    const next = { x: p.x + pr.vx * dt, y: p.y + pr.vy * dt };
-
-    let hit = 0;
-    if (ctx.level.blocked(next.x, next.y, 0)) {
-      explode(ctx, e, pr.kind, pr.dmg, pr.owner, next, hit);
-      return;
-    }
-
-    const tag = pr.fromPlayer ? TAG.DAMAGEABLE : TAG.PLAYER;
-    for (const t of ctx.world.query(next, pr.r + 18, tag)) {
-      if (t === pr.owner || ctx.world.isPendingDeath(t)) continue;
-      if (!pr.fromPlayer && t !== ctx.player) continue;
-      const tp = ctx.world.pos(t);
-      const tr = ctx.s.radius.get(t)?.r ?? 0;
-      if (Math.hypot(tp.x - next.x, tp.y - next.y) <= pr.r + tr) {
-        hit = t;
-        break;
+  ctx.s.projectile.forEach((id, p) => {
+    if (ctx.world.isPendingDeath(id)) return;
+    p.life -= dt;
+    const start = { ...ctx.world.pos(id) },
+      steps = Math.max(1, Math.ceil(Math.hypot(p.vx * dt, p.vy * dt) / 4));
+    for (let k = 1; k <= steps; k++) {
+      const point = {
+        x: start.x + (p.vx * dt * k) / steps,
+        y: start.y + (p.vy * dt * k) / steps,
+      };
+      if (ctx.level.terrainBlocked(point.x, point.y, p.r * 0.45)) {
+        impact(ctx, id, p, ctx.world.pos(id), 0);
+        return;
       }
+      const tag = p.fromPlayer ? TAG.DAMAGEABLE : TAG.PLAYER;
+      for (const target of ctx.world.query(point, p.r + 18, tag)) {
+        if (
+          target === p.owner ||
+          ctx.world.isPendingDeath(target) ||
+          p.hit?.includes(target)
+        )
+          continue;
+        const at = ctx.world.pos(target);
+        if (dist(point, at) > p.r + (ctx.s.radius.get(target)?.r || 0))
+          continue;
+        if (p.element === 'blink' && (p.pierce || 0) > 0) {
+          applyDamage(ctx, target, p.dmg, p.owner);
+          p.hit!.push(target);
+          p.pierce!--;
+          emitRing(ctx, at, 18, ITEMS.blink.color, 0.25);
+          continue;
+        }
+        impact(ctx, id, p, point, target);
+        return;
+      }
+      ctx.world.setPos(id, point);
     }
-
-    if (hit || pr.life <= 0) {
-      explode(ctx, e, pr.kind, pr.dmg, pr.owner, next, hit);
-      return;
-    }
-    ctx.world.setPos(e, next);
+    if (p.life <= 0) impact(ctx, id, p, ctx.world.pos(id), 0);
   });
 }
-
-function explode(
-  ctx: Ctx, self: number, kind: 'fireball' | 'shadow', dmg: number, owner: number,
-  at: { x: number; y: number }, directHit: number,
+function impact(
+  ctx: Ctx,
+  id: number,
+  p: Projectile,
+  pos: Vec2,
+  target: number,
 ): void {
-  const radius = kind === 'fireball' ? CFG.staff.splashRadius : 0;
-  ctx.world.emit({ kind: 'impact', entity: self, x: at.x, y: at.y, amount: radius });
-  if (kind === 'fireball') {
-    for (const t of ctx.world.query(at, radius + 20, TAG.DAMAGEABLE)) {
-      if (t === owner || ctx.world.isPendingDeath(t)) continue;
-      const tp = ctx.world.pos(t);
-      const tr = ctx.s.radius.get(t)?.r ?? 0;
-      if (Math.hypot(tp.x - at.x, tp.y - at.y) > radius + tr) continue;
-      applyDamage(ctx, t, CFG.staff.splashDmg, owner);
+  if (p.fromPlayer) {
+    if (p.element === 'ember' || !p.element) {
+      circleHit(ctx, pos, MAGIC.fireRadius, MAGIC.fireSplash);
+      emitRing(ctx, pos, MAGIC.fireRadius, ITEMS.ember.color, 0.4);
     }
-    if (directHit) applyDamage(ctx, directHit, dmg, owner);
-  } else if (directHit) {
-    applyDamage(ctx, directHit, dmg, owner);
-  }
-  ctx.world.destroy(self);
+    if (target) {
+      applyDamage(ctx, target, p.dmg, p.owner);
+      const mob = ctx.s.mob.get(target);
+      if (mob && p.element === 'frost') mob.slow = MAGIC.frostSlow;
+    }
+    if (p.element && p.element !== 'ember')
+      emitRing(
+        ctx,
+        pos,
+        p.element === 'frost' ? 28 : 20,
+        ITEMS[p.element].color,
+        0.35,
+      );
+  } else if (target) applyDamage(ctx, target, p.dmg, p.owner);
+  ctx.world.emit({ kind: 'cast', x: pos.x, y: pos.y });
+  ctx.world.destroy(id);
 }

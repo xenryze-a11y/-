@@ -11,9 +11,20 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import type { TextureAtlas } from './atlas';
 import { ANCHOR_Y, shoeSpriteName } from './art';
 import { LAYER } from './layers';
-import { spriteName, facingView } from './facing';
-import { TILE, TILE_SPRITE } from './level';
-import { RIG, bodyBob, footPos, fxFrame, handBob, handRest, newLimbPose, updateWalk, type LimbPose } from './animation';
+import { makeRng } from './math';
+import { spriteName, facingView, fourDirection } from './facing';
+import { TILE, TILE_SPRITE, Tile } from './level';
+import {
+  RIG,
+  bodyBob,
+  footPos,
+  fxFrame,
+  handBob,
+  handRest,
+  newLimbPose,
+  updateWalk,
+  type LimbPose,
+} from './animation';
 import { FX_ANIMS, CFG } from '../game/data';
 import { TAG, type Look } from '../game/components';
 import type { Scene } from '../game/spawn';
@@ -38,6 +49,7 @@ interface EntityView {
   /** 静态物件（树、拾取物、投射物）只有一个 sprite。 */
   sprite?: Sprite;
   parts?: Parts;
+  visualAngle?: number;
 }
 
 const BODY_ANCHOR_Y = ANCHOR_Y / 48;
@@ -48,19 +60,31 @@ export class WorldView {
   readonly decalLayer = new Container();
   readonly entityLayer = new Container();
   readonly fxLayer = new Container();
-  readonly frontLayer = new Container();
+  readonly lightLayer = new Container();
+  readonly walls: {
+    sprite: Sprite;
+    x: number;
+    y: number;
+    depth: number;
+    alpha: number;
+  }[] = [];
+  private readonly lights = new Map<number, Sprite>();
 
   private readonly views = new Map<number, EntityView>();
   private groundSprite?: Sprite;
-  private frontSprite?: Sprite;
   /** 表现层自己的时钟：特效帧率不该依赖模拟步数。 */
   private renderTime = 0;
 
   constructor(private readonly atlas: TextureAtlas) {
-    // 层序固定：地面 → 血迹 → 实体（按 y 排） → 特效 → 前景墙。
-    // 前景墙压住角色下半身，就是 Go 版「背面墙在实体之下、正面墙在实体之上」的伪 3D 做法。
+    // 地面 → 血迹 → 火光 → 实体与墙（共用脚底深度）→ 特效。
     this.entityLayer.sortableChildren = true;
-    this.root.addChild(this.groundLayer, this.decalLayer, this.entityLayer, this.fxLayer, this.frontLayer);
+    this.root.addChild(
+      this.groundLayer,
+      this.decalLayer,
+      this.lightLayer,
+      this.entityLayer,
+      this.fxLayer,
+    );
   }
 
   setScene(scene: Scene): void {
@@ -70,64 +94,121 @@ export class WorldView {
     }
     this.views.clear();
     this.rebuildGround(scene);
-    this.rebuildFront(scene);
+    this.rebuildWalls(scene);
   }
 
-  /** 地面整张预渲染成一张 canvas → 一个 Sprite，避免 4096 个瓦片各占一个显示对象。 */
   private rebuildGround(scene: Scene): void {
     if (this.groundSprite) {
       this.groundLayer.removeChild(this.groundSprite);
       this.groundSprite.destroy({ texture: true, textureSource: true });
     }
-    const { level } = scene;
-    const canvas = document.createElement('canvas');
-    canvas.width = level.pixelW;
-    canvas.height = level.pixelH;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.imageSmoothingEnabled = false;
-    for (let cy = 0; cy < level.h; cy++) {
-      for (let cx = 0; cx < level.w; cx++) {
-        const name = TILE_SPRITE[level.at(cx, cy)];
-        const f = this.atlas.frames[name];
-        if (f) ctx.drawImage(this.atlas.canvas, f.x, f.y, f.w, f.h, cx * TILE, cy * TILE, TILE, TILE);
-        else {
-          ctx.fillStyle = '#3a5430';
-          ctx.fillRect(cx * TILE, cy * TILE, TILE, TILE);
+    const level = scene.level,
+      c = document.createElement('canvas');
+    c.width = level.pixelW;
+    c.height = level.pixelH;
+    const g = c.getContext('2d')!;
+    g.imageSmoothingEnabled = false;
+    for (let y = 0; y < level.h; y++)
+      for (let x = 0; x < level.w; x++) {
+        const tile = level.at(x, y),
+          name = TILE_SPRITE[tile === Tile.WALL ? Tile.STONE : tile],
+          f = this.atlas.frames[name];
+        g.drawImage(
+          this.atlas.canvas,
+          f.x,
+          f.y,
+          f.w,
+          f.h,
+          x * 32,
+          y * 32,
+          32,
+          32,
+        );
+        // Tile-local variations avoid a repeated carpet without introducing texture seams.
+        const rng = makeRng(x * 73471 + y * 3571 + CFG.seed);
+        if (tile === Tile.GRASS) {
+          for (let i = 0; i < 7; i++) {
+            g.fillStyle = i % 3 ? '#526c49' : '#6c8051';
+            g.fillRect(
+              x * 32 + ((rng() * 30) | 0),
+              y * 32 + ((rng() * 30) | 0),
+              1,
+              2,
+            );
+          }
+        }
+        if (tile !== Tile.WALL && tile !== Tile.WATER) {
+          if (level.at(x, y - 1) === Tile.WALL) {
+            const grad = g.createLinearGradient(0, y * 32, 0, y * 32 + 25);
+            grad.addColorStop(0, 'rgba(7,19,17,.45)');
+            grad.addColorStop(1, 'rgba(7,19,17,0)');
+            g.fillStyle = grad;
+            g.fillRect(x * 32, y * 32, 32, 25);
+          }
+          for (const [dx, dy] of [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ])
+            if (level.at(x + dx, y + dy) === Tile.WATER) {
+              g.fillStyle = '#718376';
+              g.fillRect(
+                x * 32 + (dx === 1 ? 30 : 0),
+                y * 32 + (dy === 1 ? 30 : 0),
+                dx ? 2 : 32,
+                dy ? 2 : 32,
+              );
+            }
+        }
+        if (tile === Tile.ROAD || tile === Tile.DIRT) {
+          for (const [dx, dy] of [
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ])
+            if (level.at(x + dx, y + dy) === Tile.GRASS) {
+              for (let i = 0; i < 17; i++) {
+                const along = (rng() * 32) | 0,
+                  depth = 1 + ((rng() * 4) | 0);
+                g.fillStyle = i % 3 ? '#4b6247' : '#667a4e';
+                g.fillRect(
+                  x * 32 + (dx === 1 ? 32 - depth : dx === -1 ? 0 : along),
+                  y * 32 + (dy === 1 ? 32 - depth : dy === -1 ? 0 : along),
+                  dx ? depth : 1,
+                  dy ? depth : 1,
+                );
+              }
+            }
         }
       }
-    }
-    const tex = Texture.from(canvas, true);
-    tex.source.style.scaleMode = 'nearest';
-    this.groundSprite = new Sprite(tex);
-    this.groundSprite.zIndex = LAYER.GROUND;
+    this.groundSprite = new Sprite(Texture.from(c, true));
+    this.groundSprite.texture.source.style.scaleMode = 'nearest';
     this.groundLayer.addChild(this.groundSprite);
   }
-
-  /** 只画南面墙：透明底，盖在实体之上。 */
-  private rebuildFront(scene: Scene): void {
-    if (this.frontSprite) {
-      this.frontLayer.removeChild(this.frontSprite);
-      this.frontSprite.destroy({ texture: true, textureSource: true });
-    }
-    const { level } = scene;
-    const canvas = document.createElement('canvas');
-    canvas.width = level.pixelW;
-    canvas.height = level.pixelH;
-    const ctx = canvas.getContext('2d');
-    const f = this.atlas.frames.tileWallTop;
-    if (!ctx || !f) return;
-    ctx.imageSmoothingEnabled = false;
-    for (let cy = 0; cy < level.h; cy++) {
-      for (let cx = 0; cx < level.w; cx++) {
-        if (!level.southWalls[cy * level.w + cx]) continue;
-        ctx.drawImage(this.atlas.canvas, f.x, f.y, f.w, f.h, cx * TILE, cy * TILE, TILE, TILE);
-      }
-    }
-    const tex = Texture.from(canvas, true);
-    tex.source.style.scaleMode = 'nearest';
-    this.frontSprite = new Sprite(tex);
-    this.frontLayer.addChild(this.frontSprite);
+  /** 墙脚和人物脚底共用同一排序，不能把南墙整张烘焙在最高层。 */
+  private rebuildWalls(scene: Scene): void {
+    for (const wall of this.walls) wall.sprite.destroy();
+    this.walls.length = 0;
+    const level = scene.level;
+    for (let y = 0; y < level.h; y++)
+      for (let x = 0; x < level.w; x++)
+        if (level.at(x, y) === Tile.WALL) {
+          const sprite = new Sprite(
+            this.atlas.get('tileWallRaised' + ((x + y * 7) % 4)),
+          );
+          sprite.position.set(x * TILE, y * TILE - TILE);
+          sprite.zIndex = (y + 1) * TILE + 0.1;
+          this.entityLayer.addChild(sprite);
+          this.walls.push({
+            sprite,
+            x: x * TILE,
+            y: y * TILE,
+            depth: (y + 1) * TILE,
+            alpha: 1,
+          });
+        }
   }
 
   applyCamera(camera: Camera): void {
@@ -165,6 +246,49 @@ export class WorldView {
       v.root.destroy({ children: true });
       this.views.delete(e);
     }
+    const player = world.pos(scene.player);
+    for (const wall of this.walls) {
+      const hides =
+        player.y < wall.depth &&
+        player.y > wall.y - 53 &&
+        player.x > wall.x - 13 &&
+        player.x < wall.x + 45;
+      wall.alpha +=
+        ((hides ? 0.22 : 1) - wall.alpha) * (1 - Math.exp(-14 * dt));
+      wall.sprite.alpha = wall.alpha;
+    }
+    for (const [id, v] of this.views)
+      if (v.look.staticSprite === 'propTree' && v.sprite) {
+        const p = world.pos(id),
+          hides =
+            player.y < p.y &&
+            player.y > p.y - 62 &&
+            Math.abs(player.x - p.x) < 27;
+        v.sprite.alpha +=
+          ((hides ? 0.33 : 1) - v.sprite.alpha) * (1 - Math.exp(-10 * dt));
+      }
+    const aliveLights = new Set<number>();
+    s.prop.forEach((id, prop) => {
+      if (prop.sprite !== 'propTorch') return;
+      aliveLights.add(id);
+      let light = this.lights.get(id);
+      if (!light) {
+        light = new Sprite(this.atlas.get('partGlow'));
+        light.anchor.set(0.5);
+        light.blendMode = 'add';
+        this.lightLayer.addChild(light);
+        this.lights.set(id, light);
+      }
+      const p = world.pos(id);
+      light.position.set(p.x, p.y - 8);
+      light.scale.set(1, 0.7);
+      light.alpha = 0.7 + Math.sin(this.renderTime * 7 + id) * 0.1;
+    });
+    for (const [id, light] of this.lights)
+      if (!aliveLights.has(id)) {
+        light.destroy();
+        this.lights.delete(id);
+      }
   }
 
   private createView(look: Look): EntityView {
@@ -174,6 +298,13 @@ export class WorldView {
       const sprite = new Sprite(this.atlas.get(look.staticSprite));
       sprite.anchor.set(0.5, look.family === 'prop' ? 0.88 : 0.5);
       sprite.zIndex = look.family === 'prop' ? LAYER.BODY : LAYER.FX;
+      if (look.family === 'prop') {
+        const shadow = new Sprite(this.atlas.get('partPropShadow'));
+        shadow.anchor.set(0.5);
+        shadow.position.set(4, 4);
+        shadow.scale.set(look.staticSprite === 'propTree' ? 1 : 0.7, 0.65);
+        root.addChild(shadow);
+      }
       root.addChild(sprite);
       view.sprite = sprite;
       return view;
@@ -182,7 +313,12 @@ export class WorldView {
     root.sortableChildren = true;
     // 部件贴图是 32×48 画布、身体只占中间 14px，等比放大一点才压得住 32px 的瓦片。
     root.scale.set((look.scale ?? 1) * 1.25);
-    const mk = (name: string, ax: number, ay: number, layer: number): Sprite => {
+    const mk = (
+      name: string,
+      ax: number,
+      ay: number,
+      layer: number,
+    ): Sprite => {
       const s = new Sprite(this.atlas.get(name));
       s.anchor.set(ax, ay);
       s.zIndex = layer;
@@ -191,16 +327,23 @@ export class WorldView {
     };
     const parts: Parts = {
       shadow: mk('partShadow', 0.5, 0.5, LAYER.SHADOW),
-      feet: [mk('partFoot', 0.5, 0.5, LAYER.FEET), mk('partFoot', 0.5, 0.5, LAYER.FEET)],
+      feet: [
+        mk('partFoot', 0.5, 0.5, LAYER.FEET),
+        mk('partFoot', 0.5, 0.5, LAYER.FEET),
+      ],
       body: mk('heroFrontBody', 0.5, BODY_ANCHOR_Y, LAYER.BODY),
       head: mk('heroFrontHead', 0.5, BODY_ANCHOR_Y, LAYER.HEAD),
       flash: mk('heroFrontBody', 0.5, BODY_ANCHOR_Y, LAYER.HEAD + 1),
       weapon: mk('weaponSword', 0.5, 28 / 32, LAYER.WEAPON),
-      hands: [mk('partHand', 0.5, 0.5, LAYER.HANDS), mk('partHand', 0.5, 0.5, LAYER.HANDS)],
+      hands: [
+        mk('partHand', 0.5, 0.5, LAYER.HANDS),
+        mk('partHand', 0.5, 0.5, LAYER.HANDS),
+      ],
       hpBg: mk('partShadow', 0.5, 0.5, LAYER.LABEL),
       hpFg: mk('partShadow', 0.5, 0.5, LAYER.LABEL + 1),
     };
-    parts.shadow.y = 12;
+    parts.shadow.y = 0;
+    parts.shadow.scale.set(1, 0.65);
     parts.flash.blendMode = 'add';
     parts.flash.alpha = 0;
     // 血条用 1×1 白点拉伸，比每帧重建 Graphics 便宜。
@@ -213,15 +356,21 @@ export class WorldView {
     parts.hpBg.width = 22;
     parts.hpBg.height = 3;
     parts.hpFg.height = 2;
-    parts.hpBg.y = -35;
-    parts.hpFg.y = -35;
+    parts.hpBg.y = -43;
+    parts.hpFg.y = -43;
     parts.hpBg.visible = false;
     parts.hpFg.visible = false;
     view.parts = parts;
     return view;
   }
 
-  private updateAvatar(v: EntityView, e: number, look: Look, scene: Scene, dt: number): void {
+  private updateAvatar(
+    v: EntityView,
+    e: number,
+    look: Look,
+    scene: Scene,
+    dt: number,
+  ): void {
     const parts = v.parts!;
     const { world, s } = scene;
     const p = world.pos(e);
@@ -231,7 +380,8 @@ export class WorldView {
 
     // 朝向归并：连续弧度 → 3 套贴图 + 水平镜像。朝左只翻，不旋转。
     const f = s.facing.get(e);
-    const { view, flip } = facingView(f?.angle ?? Math.PI / 2);
+    v.visualAngle = fourDirection(f?.angle ?? Math.PI / 2, v.visualAngle);
+    const { view, flip } = facingView(v.visualAngle);
     const flipX = flip ? -1 : 1;
     const bodyTex = this.atlas.get(spriteName(look.family, view, 'Body'));
     const headTex = this.atlas.get(spriteName(look.family, view, 'Head'));
@@ -240,18 +390,20 @@ export class WorldView {
     parts.flash.texture = bodyTex;
     // 斗篷部件先不下发（见 docs/DECISIONS.md D13），身体只剩 Body + Head。
     for (const sp of [parts.body, parts.head, parts.flash]) sp.scale.x = flipX;
-    for (const sp of [parts.body, parts.head, parts.flash]) sp.y = -bob;
+    for (const sp of [parts.body, parts.head, parts.flash]) sp.y = -bob - 12;
 
     // 脚：相位跟位移，不跟时间。贴墙不动时 blend 会平滑回 0，脚自然停住。
     // 鞋按「装备材质 × 视角」选贴图：侧视用带鞋头的 <Mat>Side 那张。
     // 换装只改 Equip.shoes 这个数据，这里不用加分支。
-    const shoeTex = this.atlas.get(shoeSpriteName(s.equip.get(e)?.shoes ?? 'cloth', view === 'side'));
+    const shoeTex = this.atlas.get(
+      shoeSpriteName(s.equip.get(e)?.shoes ?? 'cloth', view === 'side'),
+    );
     for (let i = 0; i < 2; i++) {
       const fp = footPos(v.pose, rig, i);
       parts.feet[i].x = fp.x;
-      parts.feet[i].y = rig.soleY + fp.y;
+      parts.feet[i].y = rig.soleY + fp.y - 12;
       parts.feet[i].texture = shoeTex;
-      parts.feet[i].scale.set(rig.footScale);
+      parts.feet[i].scale.set(rig.footScale * flipX, rig.footScale);
     }
     // 手位：三档视角锚点（Go D52 之前的「不平滑」版）+ 走路摆动，
     // 不做 360° 连续插值，过对角线时手直接跳到另一组锚点。
@@ -259,7 +411,7 @@ export class WorldView {
       const rest = handRest(view, i, flip);
       const hb = handBob(v.pose, rig, i);
       parts.hands[i].x = rest.x + hb.x;
-      parts.hands[i].y = rest.y + hb.y - bob;
+      parts.hands[i].y = rest.y + hb.y - bob - 12;
       // 悬浮手比躯干小得多，放大后会像两块装甲板。
       parts.hands[i].scale.set(0.65);
     }
@@ -269,24 +421,34 @@ export class WorldView {
     const pl = s.player.get(e);
     const mob = s.mob.get(e);
     const aim = f?.angle ?? 0;
-    const weaponName = isPlayer && pl?.weapon === 'staff' ? 'weaponStaff' : look.family === 'caster' ? 'weaponStaff' : 'weaponSword';
+    const staff =
+      (isPlayer && pl?.weapon === 'staff') || look.family === 'caster';
+    const weaponName = staff
+      ? pl
+        ? 'staff_' + pl.skill
+        : 'weaponStaff'
+      : 'weaponSword';
     parts.weapon.texture = this.atlas.get(weaponName);
     // 亡者手里是锈剑，和玩家那把亮剑一眼能分开。
     parts.weapon.tint = look.family === 'zombie' ? 0x8a8172 : 0xffffff;
-    parts.weapon.anchor.set(0.5, weaponName === 'weaponStaff' ? 38 / 48 : 28 / 32);
+    parts.weapon.anchor.set(0.5, staff ? 38 / 48 : 28 / 32);
     // 武器跟着持械手（右手）走，静止位置同样取离散锚点。
     const restR = handRest(view, 1, flip);
     const hbR = handBob(v.pose, rig, 1);
     parts.weapon.x = restR.x + hbR.x;
-    parts.weapon.y = restR.y + hbR.y - bob;
+    parts.weapon.y = restR.y + hbR.y - bob - 12;
 
-    let rotate = weaponName === 'weaponStaff' ? 0.16 : aim + Math.PI / 2 - 0.55;
+    let rotate = staff ? 0.16 : aim + Math.PI / 2 - 0.55;
     let swing = 0;
     if (pl && pl.attackAnim > 0) {
       const dur = pl.weapon === 'staff' ? CFG.staff.animDur : CFG.sword.animDur;
       const prog = 1 - pl.attackAnim / dur;
       const arc = pl.weapon === 'sword' ? CFG.sword.arc : 0.5;
-      rotate = pl.swingAngle + Math.PI / 2 - arc / 2 + arc * (1 - (1 - prog) * (1 - prog));
+      rotate =
+        pl.swingAngle +
+        Math.PI / 2 -
+        arc / 2 +
+        arc * (1 - (1 - prog) * (1 - prog));
       swing = Math.sin(prog * Math.PI);
     } else if (pl && pl.castAnim > 0) {
       rotate = 0.16 + Math.sin(pl.castAnim * 18) * 0.12;
@@ -304,7 +466,7 @@ export class WorldView {
     const flash = Math.max(pl?.hurtFlash ?? 0, mob?.hurtFlash ?? 0);
     parts.flash.alpha = Math.min(0.85, flash * 4);
     parts.flash.x = 0;
-    parts.flash.y = -bob;
+    parts.flash.y = -bob - 12;
 
     // 头顶血条
     const h = s.health.get(e);
@@ -318,26 +480,74 @@ export class WorldView {
       parts.hpFg.x = -10;
     }
 
+    parts.body.zIndex = 10;
+    parts.head.zIndex = 14;
+    parts.hands[0].zIndex = view === 'back' ? 8 : 16;
+    parts.hands[1].zIndex = view === 'back' ? 9 : 17;
+    parts.weapon.zIndex =
+      view === 'back' ? 9 : view === 'side' && flip ? 11 : 18;
+    if (staff) {
+      parts.weapon.rotation =
+        view === 'back' ? -0.22 : view === 'front' ? 0.2 : flip ? -0.34 : 0.34;
+      if (pl && pl.castAnim > 0) parts.weapon.rotation = aim + Math.PI / 2;
+    }
+    parts.body.tint = mob?.kind === 'lunge' ? 0xb7a38c : 0xffffff;
+    parts.head.tint = mob?.kind === 'lunge' ? 0xe0c08a : 0xffffff;
+    if ((mob?.slow || 0) > 0) {
+      parts.body.tint = 0x94cfe0;
+      parts.head.tint = 0xa9d9e5;
+    }
+    if ((mob?.frozen || 0) > 0) {
+      parts.body.tint = 0x79cae9;
+      parts.head.tint = 0x9ddff5;
+    }
+    parts.body.rotation =
+      (mob?.windup || 0) > 0 ? Math.sin(mob!.windup! * 8) * 0.045 : 0;
+    parts.head.rotation = -parts.body.rotation * 0.5;
+    if (mob?.kind === 'caster')
+      v.root.y -= Math.sin(this.renderTime * 2 + e) * 1.2;
+    if (look.family === 'zombie') {
+      parts.weapon.visible = false;
+      parts.hands.forEach((hand) => (hand.tint = 0xa3b58c));
+    }
     // 翻滚无敌帧：脚下亮环用影子放大 + 变亮代替。
     const dodge = s.dodge.get(e);
     parts.shadow.tint = dodge && dodge.invuln > 0 ? 0x9ad8ff : 0xffffff;
-    parts.shadow.alpha = dodge && dodge.invuln > 0 ? 1 : 0.75;
+    parts.shadow.alpha = dodge && dodge.invuln > 0 ? 1 : 0.6;
+    if (pl && pl.shield > 0) {
+      parts.shadow.tint = 0xa9efc6;
+      parts.shadow.alpha = 0.9;
+    }
   }
 
-  private updateStatic(sprite: Sprite, e: number, look: Look, scene: Scene): void {
+  private updateStatic(
+    sprite: Sprite,
+    e: number,
+    look: Look,
+    scene: Scene,
+  ): void {
     const { s } = scene;
     const pr = s.projectile.get(e);
     if (pr) {
       const anim = FX_ANIMS[pr.kind];
-      sprite.texture = this.atlas.get(fxFrame(anim, this.renderTime, this.atlas));
-      sprite.rotation = Math.atan2(pr.vy, pr.vx) + Math.PI / 2;
-      sprite.scale.set(1.15);
+      sprite.texture = pr.element
+        ? this.atlas.get(
+            `missile_${pr.element}_${Math.floor(this.renderTime * 14) % 4}`,
+          )
+        : this.atlas.get(fxFrame(anim, this.renderTime, this.atlas));
+      sprite.y = -12;
+      sprite.rotation = Math.atan2(pr.vy, pr.vx);
+      sprite.scale.set(1);
       return;
     }
     const pk = s.pickup.get(e);
     if (pk) {
       sprite.y = -4 - Math.sin(pk.bob) * 2.5;
-      sprite.scale.set(1 + Math.sin(pk.bob) * 0.06);
+      sprite.scale.set(
+        look.staticSprite?.startsWith('item_')
+          ? 0.48
+          : 1 + Math.sin(pk.bob) * 0.06,
+      );
       return;
     }
     // 火把轻微闪动：表现层的时钟，不写回 ECS。

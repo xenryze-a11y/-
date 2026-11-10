@@ -7,6 +7,16 @@
  * ⚠️ 朝左绝不旋转 180°，否则帽子、法杖、脸的光源都会跟着翻过去。
  */
 
+import { angleDiff } from './math';
+
+/** 对角边界加少量迟滞，防止鼠标沿分界线晃动时左右闪图；不改模拟瞄准角。 */
+export function fourDirection(angle: number, previous?: number): number {
+  return previous === undefined ||
+    Math.abs(angleDiff(angle, previous)) > Math.PI / 4 + 0.12
+    ? Math.round(angle / (Math.PI / 2)) * (Math.PI / 2)
+    : previous;
+}
+
 export type View = 'front' | 'back' | 'side';
 
 export interface FacingView {

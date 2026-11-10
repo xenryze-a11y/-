@@ -1,0 +1,2 @@
+# 生成的单文件包含内联着色器，不把着色器字符串的行末空格当作源码问题。
+*.HTML linguist-generated=true whitespace=-blank-at-eol

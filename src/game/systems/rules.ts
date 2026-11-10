@@ -1,6 +1,8 @@
 /** 规则层：拾取 + 缓慢补怪，让 demo 一直有东西可打。 */
 import { TILE } from '../../engine/level';
 import { TAG, type MobKind } from '../components';
+import { addItem, notice } from '../inventory';
+import { ITEMS, INVENTORY } from '../items';
 import { CFG } from '../data';
 import type { Ctx } from './context';
 
@@ -11,20 +13,36 @@ export function resetRules(): void {
 }
 
 export function updateRules(ctx: Ctx): void {
-  const pp = ctx.world.pos(ctx.player);
+  if (ctx.gameOver) return;
+  const pp = ctx.world.pos(ctx.player),
+    inv = ctx.s.inventory.get(ctx.player)!;
   ctx.s.pickup.forEach((e, pk) => {
-    const p = ctx.world.pos(e);
-    if (Math.hypot(p.x - pp.x, p.y - pp.y) > 26) return;
-    const pl = ctx.s.player.get(ctx.player);
-    const h = ctx.s.health.get(ctx.player);
-    if (pl && pk.kind === 'mana') pl.mana = Math.min(pl.maxMana, pl.mana + pk.amount);
-    if (h && pk.kind === 'health') h.hp = Math.min(h.max, h.hp + pk.amount);
-    ctx.world.emit({ kind: 'pickup', entity: e, x: p.x, y: p.y, text: pk.kind === 'mana' ? '+法力' : '+生命' });
-    ctx.world.destroy(e);
+    if (ctx.world.isPendingDeath(e) || ctx.world.time < (pk.ignoreUntil || 0))
+      return;
+    const pos = ctx.world.pos(e);
+    if (
+      Math.hypot(pos.x - pp.x, pos.y - pp.y) > INVENTORY.pickupRange ||
+      !ctx.level.lineClear(pp, pos)
+    )
+      return;
+    const before = pk.count,
+      remaining = addItem(inv.slots, pk.kind, before);
+    pk.count = remaining;
+    if (remaining === before) {
+      if (ctx.world.time - (pk.fullNotice ?? -9) > 3) {
+        notice(ctx, '背包已满 · 地上的物品会保留');
+        pk.fullNotice = ctx.world.time;
+      }
+      return;
+    }
+    inv.revision++;
+    notice(ctx, `拾取 ${ITEMS[pk.kind].name} ×${before - remaining}`);
+    if (!remaining) ctx.world.destroy(e);
   });
 
   if (ctx.gameOver) return;
-  if (ctx.world.withTag(TAG.MOB).length >= 16 || ctx.world.time < nextRespawn) return;
+  if (ctx.world.withTag(TAG.MOB).length >= 16 || ctx.world.time < nextRespawn)
+    return;
   nextRespawn = ctx.world.time + 2.2;
   spawnOne(ctx);
 }
@@ -37,7 +55,13 @@ function spawnOne(ctx: Ctx): void {
     const d = 380 + ctx.world.rng() * 180;
     const x = pp.x + Math.cos(a) * d;
     const y = pp.y + Math.sin(a) * d;
-    if (x < TILE * 2 || y < TILE * 2 || x > ctx.level.pixelW - TILE * 2 || y > ctx.level.pixelH - TILE * 2) continue;
+    if (
+      x < TILE * 2 ||
+      y < TILE * 2 ||
+      x > ctx.level.pixelW - TILE * 2 ||
+      y > ctx.level.pixelH - TILE * 2
+    )
+      continue;
     if (ctx.level.blocked(x, y, 14)) continue;
 
     const kinds: MobKind[] = ['shamble', 'shamble', 'lunge', 'caster'];
@@ -48,14 +72,26 @@ function spawnOne(ctx: Ctx): void {
     ctx.s.health.set(e, { hp: cfg.hp, max: cfg.hp, armor: cfg.armor });
     ctx.s.facing.set(e, { angle: a + Math.PI });
     ctx.s.mob.set(e, {
-      kind, speed: cfg.speed, aggro: cfg.aggro, atkRange: cfg.atkRange, atkCd: cfg.atkCd,
-      dmg: cfg.dmg, think: ctx.world.rng(), attackAnim: 0, hurtFlash: 0, home: { x, y },
+      kind,
+      speed: cfg.speed,
+      aggro: cfg.aggro,
+      atkRange: cfg.atkRange,
+      atkCd: cfg.atkCd,
+      dmg: cfg.dmg,
+      think: ctx.world.rng(),
+      attackAnim: 0,
+      hurtFlash: 0,
+      home: { x, y },
     });
     ctx.s.look.set(e, {
       family: kind === 'caster' ? 'caster' : 'zombie',
-      scale: kind === 'lunge' ? 0.94 : 1, showHealth: true, animated: true,
+      scale: kind === 'lunge' ? 0.94 : 1,
+      showHealth: true,
+      animated: true,
     });
-    ctx.s.equip.set(e, { shoes: ctx.world.rng() < 0.5 ? 'zombieBare' : 'cloth' });
+    ctx.s.equip.set(e, {
+      shoes: ctx.world.rng() < 0.5 ? 'zombieBare' : 'cloth',
+    });
     return;
   }
 }
