@@ -69,6 +69,7 @@ export interface GameEvent {
   kind:
     | 'swing'
     | 'cast'
+    | 'spell'
     | 'impact'
     | 'hurt'
     | 'playerHurt'
@@ -76,13 +77,23 @@ export interface GameEvent {
     | 'dodge'
     | 'noMana'
     | 'spawn'
-    | 'pickup';
+    | 'pickup'
+    | 'notice'
+    | 'ring'
+    | 'bolt';
+  element?: string;
+  stage?: 'cast' | 'impact';
+  special?: boolean;
   entity?: Entity;
   x: number;
   y: number;
   angle?: number;
   amount?: number;
   text?: string;
+  color?: string;
+  life?: number;
+  x2?: number;
+  y2?: number;
 }
 
 /**

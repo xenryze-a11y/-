@@ -8,6 +8,8 @@ import { fxFinished, fxFrameIndex, type FxAnim } from '../engine/animation';
 import type { TextureAtlas } from '../engine/atlas';
 import type { Camera } from '../engine/camera';
 import type { GameEvent } from '../engine/ecs';
+import { PixelSpellVfx } from './pixel-spell-vfx';
+import type { Scene } from './spawn';
 import { FX_ANIMS } from './data';
 
 interface FxEffect {
@@ -29,6 +31,7 @@ const MAX_DECALS = 60;
 
 export class Presentation {
   private effects: Effect[] = [];
+  private readonly pixels: PixelSpellVfx;
   private readonly decals: Sprite[] = [];
 
   constructor(
@@ -36,19 +39,40 @@ export class Presentation {
     private readonly decalLayer: Container,
     private readonly atlas: TextureAtlas,
     private readonly camera: Camera,
-  ) {}
+  ) {
+    this.pixels = new PixelSpellVfx(fxLayer, decalLayer);
+  }
 
   consume(events: GameEvent[]): void {
     for (const ev of events) {
       switch (ev.kind) {
+        case 'ring':
+        case 'bolt':
+        case 'spell':
+          this.pixels.consume(ev);
+          break;
+        case 'notice':
+          break;
         case 'swing': {
           const a = ev.angle ?? 0;
-          this.addFx('slash', ev.x + Math.cos(a) * 22, ev.y + Math.sin(a) * 22, a + Math.PI / 2, 1);
+          this.addFx(
+            'slash',
+            ev.x + Math.cos(a) * 22,
+            ev.y + Math.sin(a) * 22,
+            a + Math.PI / 2,
+            1,
+          );
           break;
         }
         case 'cast': {
           const a = ev.angle ?? 0;
-          this.addFx('spark', ev.x + Math.cos(a) * 20, ev.y + Math.sin(a) * 20, 0, 0.9);
+          this.addFx(
+            'spark',
+            ev.x + Math.cos(a) * 20,
+            ev.y + Math.sin(a) * 20,
+            0,
+            0.9,
+          );
           break;
         }
         case 'impact': {
@@ -74,7 +98,12 @@ export class Presentation {
           break;
         case 'noMana':
         case 'pickup':
-          this.float(ev.text ?? '', ev.x, ev.y - 24, ev.kind === 'noMana' ? 0x9ac4ff : 0xa8e6a0);
+          this.float(
+            ev.text ?? '',
+            ev.x,
+            ev.y - 24,
+            ev.kind === 'noMana' ? 0x9ac4ff : 0xa8e6a0,
+          );
           break;
         case 'spawn':
           break;
@@ -93,7 +122,9 @@ export class Presentation {
           this.effects.splice(i, 1);
           continue;
         }
-        e.sprite.texture = this.atlas.get(e.anim.frames[fxFrameIndex(e.anim, e.t)]);
+        e.sprite.texture = this.atlas.get(
+          e.anim.frames[fxFrameIndex(e.anim, e.t)],
+        );
       } else {
         e.text.y = e.y - e.t * 32;
         e.text.alpha = Math.max(0, 1 - e.t / 0.85);
@@ -112,6 +143,7 @@ export class Presentation {
       (e.type === 'fx' ? e.sprite : e.text).destroy();
     }
     this.effects = [];
+    this.pixels.clear();
     for (const d of this.decals) {
       this.decalLayer.removeChild(d);
       d.destroy();
@@ -119,7 +151,22 @@ export class Presentation {
     this.decals.length = 0;
   }
 
-  private addFx(animName: string, x: number, y: number, rotation: number, scale: number): void {
+  /** 只读组件投影护盾/预警；特效生命使用自己的渲染时钟。 */
+  sync(scene: Scene, dt: number): void {
+    this.pixels.sync(scene, dt);
+  }
+
+  get vfxStats() {
+    return this.pixels.stats;
+  }
+
+  private addFx(
+    animName: string,
+    x: number,
+    y: number,
+    rotation: number,
+    scale: number,
+  ): void {
     const anim = FX_ANIMS[animName];
     if (!anim) return;
     const sprite = new Sprite(this.atlas.get(anim.frames[0]));

@@ -114,3 +114,15 @@ updatePoison(ctx, fixed);
 - 新建投射物要把 `owner` 排除出命中列表，否则出膛就打自己。
 - 事件里别放对象引用，只放标量与坐标：以后要跨网络/存档序列化。
 - 表现状态（相位、上一帧位置、特效计时、渲染时钟）放渲染层的 `Map<Entity, View>`，**不要塞进组件**。
+
+
+## 增强版：背包、技能场与暂停
+
+- `Stores.inventory` 保存玩家 36 格、2×2 合成格、手持堆栈、靴子位和当前快捷栏；`game/items.ts` 是物品与技能内容表。
+- DOM 仅发 `InventoryCommand`。main 在模拟前分发，暂停时仍允许背包命令；关包先调用 `returnCursor`，剩余物品放不下则不关闭。
+- `Stores.field` 保存雷暴的半径、剩余生命和 tick；`updateFields` 在 `updateProjectiles` 后、`flush` 前运行。`slow/frozen/windup` 是 Mob 模拟状态。
+- 新事件 `ring/bolt/notice` 只含标量与坐标，主循环仍只有一次 `world.drain()`，Presentation 与 UI 只读消费同一数组。
+- 表现层不能临时改 Facing.angle 来挑贴图。可视四方向、局部墙体淡出和粒子时间都留在视图 / Presentation。
+- 菜单、背包、手册暂停整个固定步长链，并清空输入边沿及触控轴，避免恢复时补打或继续冲刺。
+
+`npm test` 覆盖堆栈守恒、满包不吞物、合成扣料、装备减伤、墙体视线、投射物扫掠、技能冷却 / 护盾 / 冰冻 / 闪烁、场生命周期与 AI 绕墙。

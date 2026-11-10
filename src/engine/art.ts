@@ -10,6 +10,13 @@
  * 朋友拿到真美术后：把 public/assets/atlas.png + atlas.json 放进去即可整体替换，
  * 不需要改任何绘制代码。用 window.__ASHEN__.dumpAtlas() 可以把当前这套导出成模板。
  */
+import {
+  detailTile,
+  detailBody,
+  detailHead,
+  detailProp,
+  upgradeSpecs,
+} from '../game/art-upgrade';
 import { makeRng } from './math';
 import { PALETTE as P, SHOE_MATERIALS } from '../game/data';
 
@@ -26,7 +33,7 @@ export interface BuiltAtlas {
 }
 
 type DrawFn = (p: Painter) => void;
-interface Spec {
+export interface Spec {
   name: string;
   w: number;
   h: number;
@@ -35,12 +42,21 @@ interface Spec {
 
 /** 像素画助手：一切用 fillRect，放大后才是硬边像素而不是糊边。 */
 export class Painter {
-  constructor(readonly ctx: CanvasRenderingContext2D, readonly w: number, readonly h: number) {}
+  constructor(
+    readonly ctx: CanvasRenderingContext2D,
+    readonly w: number,
+    readonly h: number,
+  ) {}
 
   rect(x: number, y: number, w: number, h: number, c: string): void {
     if (w <= 0 || h <= 0) return;
     this.ctx.fillStyle = c;
-    this.ctx.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h));
+    this.ctx.fillRect(
+      Math.round(x),
+      Math.round(y),
+      Math.round(w),
+      Math.round(h),
+    );
   }
 
   /** 逐行画像素圆，保持像素风。 */
@@ -62,7 +78,14 @@ export class Painter {
     }
   }
 
-  line(x0: number, y0: number, x1: number, y1: number, c: string, thick = 1): void {
+  line(
+    x0: number,
+    y0: number,
+    x1: number,
+    y1: number,
+    c: string,
+    thick = 1,
+  ): void {
     const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
     for (let i = 0; i <= n; i++) {
       const t = n === 0 ? 0 : i / n;
@@ -76,10 +99,10 @@ export class Painter {
   }
 }
 
-const ANCHOR_Y = 30; // 腰带行；实体世界坐标对齐这里，脚底在 +18
+const ANCHOR_Y = 30; // 部件腰带锚点；WorldView 再上移 12，使脚底与世界碰撞点对齐
 
 // ── 人形部件 ────────────────────────────────────────────────────────────
-interface Skin {
+export interface Skin {
   cloth: string;
   clothDark: string;
   trim: string;
@@ -90,13 +113,42 @@ interface Skin {
 }
 
 const SKINS: Record<string, Skin> = {
-  hero: { cloth: P.robe, clothDark: P.robeDark, trim: P.gold, skin: P.skin, skinDark: P.skinDark, hair: P.hair, eye: '#2b2b3a' },
-  zombie: { cloth: P.zombieRag, clothDark: '#3e3a32', trim: '#6b6252', skin: P.zombieSkin, skinDark: P.zombieSkinDark, hair: '#6d6a5b', eye: '#c4413b' },
-  caster: { cloth: P.casterRobe, clothDark: '#332247', trim: P.casterGlow, skin: '#9d8aa8', skinDark: '#6f5c7c', hair: '#2b2038', eye: P.casterGlow },
+  hero: {
+    cloth: '#3d536d',
+    clothDark: '#293c52',
+    trim: '#c3a269',
+    skin: P.skin,
+    skinDark: P.skinDark,
+    hair: P.hair,
+    eye: '#2b2b3a',
+  },
+  zombie: {
+    cloth: P.zombieRag,
+    clothDark: '#3e3a32',
+    trim: '#6b6252',
+    skin: P.zombieSkin,
+    skinDark: P.zombieSkinDark,
+    hair: '#6d6a5b',
+    eye: '#c4413b',
+  },
+  caster: {
+    cloth: P.casterRobe,
+    clothDark: '#332247',
+    trim: P.casterGlow,
+    skin: '#9d8aa8',
+    skinDark: '#6f5c7c',
+    hair: '#2b2038',
+    eye: P.casterGlow,
+  },
 };
 
 /** 躯干 + 裤腿。头和鞋/手是独立部件，方便以后换装；斗篷暂不画（见 docs/DECISIONS.md D13）。 */
-function drawBody(p: Painter, view: 'front' | 'back' | 'side', sk: Skin, zombie: boolean): void {
+function drawBody(
+  p: Painter,
+  view: 'front' | 'back' | 'side',
+  sk: Skin,
+  zombie: boolean,
+): void {
   const c = P.outline;
 
   if (view === 'side') {
@@ -104,9 +156,9 @@ function drawBody(p: Painter, view: 'front' | 'back' | 'side', sk: Skin, zombie:
     // 静态贴图只画裤腿，鞋和手全部交给运行时（Go D43 悬浮手脚）——
     // 侧视不再有靴子那块大色块，身体和脚都收小一档。
     p.outline(11, 31, 3, 10);
-    p.rect(11, 31, 3, 9, '#302b26');           // 后腿：只露一小截
+    p.rect(11, 31, 3, 9, '#302b26'); // 后腿：只露一小截
     p.outline(16, 30, 4, 11);
-    p.rect(16, 30, 4, 10, sk.clothDark);       // 前腿
+    p.rect(16, 30, 4, 10, sk.clothDark); // 前腿
     p.rect(16, 30, 2, 10, sk.cloth);
 
     // 躯干 10px 宽，比正面 14px 瘦一圈；侧视不该和正面一样壮。
@@ -152,7 +204,13 @@ function drawBody(p: Painter, view: 'front' | 'back' | 'side', sk: Skin, zombie:
   p.rect(9, 16, 14, 1, c);
 }
 
-function drawHead(p: Painter, view: 'front' | 'back' | 'side', sk: Skin, hood: boolean, zombie: boolean): void {
+function drawHead(
+  p: Painter,
+  view: 'front' | 'back' | 'side',
+  sk: Skin,
+  hood: boolean,
+  zombie: boolean,
+): void {
   if (view === 'side') {
     // 侧脸自成一整套：兜帽/头发必须覆盖「整个头顶 + 额头」（和正面一样压到眉上），
     // 只把眼睛以下的右半张脸、鼻尖露出来。
@@ -165,9 +223,9 @@ function drawHead(p: Painter, view: 'front' | 'back' | 'side', sk: Skin, hood: b
       // 帽顶整幅 x=9..23 / y=2..11，和正面兜帽同宽同高；前沿不收，否则又露额头。
       p.outline(9, 2, 14, 9);
       p.rect(9, 2, 14, 9, sk.clothDark);
-      p.rect(9, 2, 14, 2, sk.cloth);          // 帽顶亮边
-      p.rect(19, 9, 4, 1, sk.cloth);          // 额前帽檐转折，压到眉上
-      p.rect(9, 10, 3, 6, sk.clothDark);      // 后脑垂布（侧视特有）
+      p.rect(9, 2, 14, 2, sk.cloth); // 帽顶亮边
+      p.rect(19, 9, 4, 1, sk.cloth); // 额前帽檐转折，压到眉上
+      p.rect(9, 10, 3, 6, sk.clothDark); // 后脑垂布（侧视特有）
     } else {
       // 短发也铺满头顶：x=10..23，额前有发际，后脑留发脚。
       p.outline(10, 2, 13, 7);
@@ -219,8 +277,14 @@ function drawHead(p: Painter, view: 'front' | 'back' | 'side', sk: Skin, hood: b
 function drawTile(p: Painter, kind: string, seed: number): void {
   const rng = makeRng(seed);
   const base: Record<string, string> = {
-    grass: P.grass, dirt: P.dirt, stone: P.stone, water: P.water,
-    floor: P.wood, wall: '#6a6259', road: '#8a7250', wallTop: '#736a5e',
+    grass: P.grass,
+    dirt: P.dirt,
+    stone: P.stone,
+    water: P.water,
+    floor: P.wood,
+    wall: '#6a6259',
+    road: '#8a7250',
+    wallTop: '#736a5e',
   };
   p.rect(0, 0, 32, 32, base[kind]);
   for (let i = 0; i < 46; i++) {
@@ -228,15 +292,32 @@ function drawTile(p: Painter, kind: string, seed: number): void {
     const y = Math.floor(rng() * 32);
     const c = rng() < 0.5 ? P.grassDark : P.grassLight;
     switch (kind) {
-      case 'grass': p.rect(x, y, 1, 2, rng() < 0.5 ? P.grassDark : P.grassLight); break;
-      case 'dirt': p.rect(x, y, 2, 1, rng() < 0.5 ? '#6b543c' : '#8c7152'); break;
-      case 'stone': p.rect(x, y, 2, 2, rng() < 0.5 ? '#7d7d74' : '#98988d'); break;
-      case 'water': p.rect(x, y, 3, 1, rng() < 0.5 ? '#396683' : '#244760'); break;
-      case 'road': p.rect(x, y, 2, 1, rng() < 0.5 ? '#796245' : '#9b8160'); break;
-      case 'floor': p.rect(x, y, 3, 1, rng() < 0.5 ? P.woodDark : '#7d5738'); break;
-      case 'wall': p.rect(x, y, 3, 2, rng() < 0.5 ? '#5c554d' : '#7b7267'); break;
-      case 'wallTop': p.rect(x, y, 3, 1, rng() < 0.5 ? '#625a50' : '#877d70'); break;
-      default: p.rect(x, y, 1, 1, c);
+      case 'grass':
+        p.rect(x, y, 1, 2, rng() < 0.5 ? P.grassDark : P.grassLight);
+        break;
+      case 'dirt':
+        p.rect(x, y, 2, 1, rng() < 0.5 ? '#6b543c' : '#8c7152');
+        break;
+      case 'stone':
+        p.rect(x, y, 2, 2, rng() < 0.5 ? '#7d7d74' : '#98988d');
+        break;
+      case 'water':
+        p.rect(x, y, 3, 1, rng() < 0.5 ? '#396683' : '#244760');
+        break;
+      case 'road':
+        p.rect(x, y, 2, 1, rng() < 0.5 ? '#796245' : '#9b8160');
+        break;
+      case 'floor':
+        p.rect(x, y, 3, 1, rng() < 0.5 ? P.woodDark : '#7d5738');
+        break;
+      case 'wall':
+        p.rect(x, y, 3, 2, rng() < 0.5 ? '#5c554d' : '#7b7267');
+        break;
+      case 'wallTop':
+        p.rect(x, y, 3, 1, rng() < 0.5 ? '#625a50' : '#877d70');
+        break;
+      default:
+        p.rect(x, y, 1, 1, c);
     }
   }
   if (kind === 'floor') {
@@ -270,12 +351,23 @@ function drawProp(p: Painter, kind: string, seed: number): void {
       for (let i = 0; i < 5; i++) {
         const cx = 10 + Math.floor(rng() * 28);
         const cy = 6 + Math.floor(rng() * 26);
-        p.disc(cx, cy, 10 + Math.floor(rng() * 5), i % 2 ? '#355230' : '#2c4529');
+        p.disc(
+          cx,
+          cy,
+          10 + Math.floor(rng() * 5),
+          i % 2 ? '#355230' : '#2c4529',
+        );
       }
       p.disc(24, 22, 17, '#3d6038');
       p.disc(21, 18, 13, '#4a7040');
       for (let i = 0; i < 26; i++) {
-        p.rect(8 + Math.floor(rng() * 32), 6 + Math.floor(rng() * 28), 2, 2, '#5b8448');
+        p.rect(
+          8 + Math.floor(rng() * 32),
+          6 + Math.floor(rng() * 28),
+          2,
+          2,
+          '#5b8448',
+        );
       }
       break;
     }
@@ -365,12 +457,25 @@ function drawWeapon(p: Painter, kind: string): void {
  * 命名 sprShoe<Mat>[Side]（我们去掉 spr 前缀），裸足另有 <Rig>ShoeBare 一类按肤色出图。
  * ⚠️ 侧视鞋是单独一张、有朝右的鞋头和靴筒，不能拿正视图凑合。
  */
-const SHOE_COLORS: Record<string, { dark: string; mid: string; light: string; sole: string }> = {
+const SHOE_COLORS: Record<
+  string,
+  { dark: string; mid: string; light: string; sole: string }
+> = {
   bare: { dark: '#6f5541', mid: P.skin, light: '#e8c39e', sole: '#4a3527' },
   cloth: { dark: '#4a4038', mid: '#7c6a55', light: '#a08a6c', sole: '#332c25' },
-  leather: { dark: P.leatherDark, mid: P.leather, light: '#9a7450', sole: '#2f2118' },
+  leather: {
+    dark: P.leatherDark,
+    mid: P.leather,
+    light: '#9a7450',
+    sole: '#2f2118',
+  },
   iron: { dark: P.ironDark, mid: P.iron, light: '#d5dce0', sole: '#3d454b' },
-  zombieBare: { dark: '#4a5c3d', mid: P.zombieSkin, light: '#a8bd8e', sole: '#33402a' },
+  zombieBare: {
+    dark: '#4a5c3d',
+    mid: P.zombieSkin,
+    light: '#a8bd8e',
+    sole: '#33402a',
+  },
 };
 
 export function shoeSpriteName(mat: string, side: boolean): string {
@@ -381,10 +486,10 @@ function drawShoe(p: Painter, mat: string, side: boolean): void {
   const c = SHOE_COLORS[mat] ?? SHOE_COLORS.cloth;
   if (side) {
     p.rect(1, 1, 6, 6, P.outline);
-    p.rect(2, 1, 3, 3, c.dark);       // 靴筒
-    p.rect(2, 4, 5, 2, c.mid);        // 鞋面
-    p.rect(6, 4, 2, 2, c.light);      // 鞋头朝右
-    p.rect(1, 6, 7, 1, c.sole);       // 鞋底
+    p.rect(2, 1, 3, 3, c.dark); // 靴筒
+    p.rect(2, 4, 5, 2, c.mid); // 鞋面
+    p.rect(6, 4, 2, 2, c.light); // 鞋头朝右
+    p.rect(1, 6, 7, 1, c.sole); // 鞋底
   } else {
     p.rect(1, 1, 6, 6, P.outline);
     p.rect(2, 1, 4, 3, c.dark);
@@ -427,7 +532,8 @@ function drawFx(p: Painter, kind: string, frame: number, count: number): void {
       const x = c + Math.cos(a) * r;
       const y = c + Math.sin(a) * r;
       p.rect(x, y, 2, 2, t < 0.6 ? '#fff2c8' : '#d8b878');
-      if (i % 2 === 0) p.rect(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2, 2, '#e8c982');
+      if (i % 2 === 0)
+        p.rect(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2, 2, '#e8c982');
     }
   } else if (kind === 'impact') {
     const r = 5 + t * 17;
@@ -436,7 +542,13 @@ function drawFx(p: Painter, kind: string, frame: number, count: number): void {
     if (t < 0.5) p.disc(c, c, r * 0.3, '#fffdf0');
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2 + t;
-      p.rect(c + Math.cos(a) * (r + 3), c + Math.sin(a) * (r + 3), 2, 2, '#ffb45a');
+      p.rect(
+        c + Math.cos(a) * (r + 3),
+        c + Math.sin(a) * (r + 3),
+        2,
+        2,
+        '#ffb45a',
+      );
     }
   } else if (kind === 'fireball') {
     const wob = Math.sin(frame * 1.6) * 1.5;
@@ -454,7 +566,13 @@ function drawFx(p: Painter, kind: string, frame: number, count: number): void {
     const r = 2 + t * 5;
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
-      p.rect(8 + Math.cos(a) * r, 8 + Math.sin(a) * r, 2, 2, i % 2 ? P.fireHot : P.fire);
+      p.rect(
+        8 + Math.cos(a) * r,
+        8 + Math.sin(a) * r,
+        2,
+        2,
+        i % 2 ? P.fireHot : P.fire,
+      );
     }
     p.disc(8, 8, Math.max(1, 3 - t * 2), '#fff2c8');
   } else if (kind === 'blood') {
@@ -462,7 +580,12 @@ function drawFx(p: Painter, kind: string, frame: number, count: number): void {
     p.disc(12, 12, r, 'rgba(150,38,38,0.85)');
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI * 2;
-      p.disc(12 + Math.cos(a) * (r + 3), 12 + Math.sin(a) * (r + 3), 2 - t, 'rgba(150,38,38,0.8)');
+      p.disc(
+        12 + Math.cos(a) * (r + 3),
+        12 + Math.sin(a) * (r + 3),
+        2 - t,
+        'rgba(150,38,38,0.8)',
+      );
     }
   }
 }
@@ -476,38 +599,125 @@ function buildSpecs(): Spec[] {
   for (const [family, sk] of Object.entries(SKINS)) {
     const zombie = family === 'zombie';
     const hood = family === 'hero' || family === 'caster';
-    const prefix = family === 'hero' ? 'hero' : family === 'zombie' ? 'zombie' : 'caster';
+    const prefix =
+      family === 'hero' ? 'hero' : family === 'zombie' ? 'zombie' : 'caster';
     for (const v of views) {
       const view = viewKey[v];
-      out.push({ name: `${prefix}${v}Body`, w: 32, h: 48, draw: (p) => drawBody(p, view, sk, zombie) });
-      out.push({ name: `${prefix}${v}Head`, w: 32, h: 48, draw: (p) => drawHead(p, view, sk, hood, zombie) });
+      out.push({
+        name: `${prefix}${v}Body`,
+        w: 32,
+        h: 48,
+        draw: (p) => {
+          drawBody(p, view, sk, zombie);
+          detailBody(p, view, sk, zombie);
+        },
+      });
+      out.push({
+        name: `${prefix}${v}Head`,
+        w: 32,
+        h: 48,
+        draw: (p) => {
+          drawHead(p, view, sk, hood, zombie);
+          detailHead(p, view, sk, hood, zombie);
+        },
+      });
     }
   }
 
-  for (const kind of ['grass', 'dirt', 'stone', 'water', 'floor', 'wall', 'road', 'wallTop']) {
-    out.push({ name: `tile${kind[0].toUpperCase()}${kind.slice(1)}`, w: 32, h: 32, draw: (p) => drawTile(p, kind, hash(kind)) });
+  for (const kind of [
+    'grass',
+    'dirt',
+    'stone',
+    'water',
+    'floor',
+    'wall',
+    'road',
+    'wallTop',
+  ]) {
+    out.push({
+      name: `tile${kind[0].toUpperCase()}${kind.slice(1)}`,
+      w: 32,
+      h: 32,
+      draw: (p) => {
+        drawTile(p, kind, hash(kind));
+        detailTile(p, kind, hash(kind));
+      },
+    });
   }
   const propSizes: Record<string, [number, number]> = {
-    tree: [48, 64], grave: [24, 32], crate: [32, 32], torch: [16, 32], rock: [24, 24], mana: [16, 16], health: [16, 16],
+    tree: [48, 64],
+    grave: [24, 32],
+    crate: [32, 32],
+    torch: [16, 32],
+    rock: [24, 24],
+    mana: [16, 16],
+    health: [16, 16],
   };
   for (const [kind, [w, h]] of Object.entries(propSizes)) {
-    const name = kind === 'mana' || kind === 'health' ? `pickup${kind[0].toUpperCase()}${kind.slice(1)}` : `prop${kind[0].toUpperCase()}${kind.slice(1)}`;
-    out.push({ name, w, h, draw: (p) => drawProp(p, kind, hash(kind)) });
+    const name =
+      kind === 'mana' || kind === 'health'
+        ? `pickup${kind[0].toUpperCase()}${kind.slice(1)}`
+        : `prop${kind[0].toUpperCase()}${kind.slice(1)}`;
+    out.push({
+      name,
+      w,
+      h,
+      draw: (p) => {
+        drawProp(p, kind, hash(kind));
+        detailProp(p, kind, hash(kind));
+      },
+    });
   }
-  out.push({ name: 'weaponSword', w: 32, h: 32, draw: (p) => drawWeapon(p, 'sword') });
-  out.push({ name: 'weaponStaff', w: 32, h: 48, draw: (p) => drawWeapon(p, 'staff') });
-  for (const kind of ['foot', 'hand']) out.push({ name: `part${kind[0].toUpperCase()}${kind.slice(1)}`, w: 8, h: 8, draw: (p) => drawPart(p, kind) });
+  out.push({
+    name: 'weaponSword',
+    w: 32,
+    h: 32,
+    draw: (p) => drawWeapon(p, 'sword'),
+  });
+  out.push({
+    name: 'weaponStaff',
+    w: 32,
+    h: 48,
+    draw: (p) => drawWeapon(p, 'staff'),
+  });
+  for (const kind of ['foot', 'hand'])
+    out.push({
+      name: `part${kind[0].toUpperCase()}${kind.slice(1)}`,
+      w: 8,
+      h: 8,
+      draw: (p) => drawPart(p, kind),
+    });
   // 鞋：5 种材质 × 2 个视角。换装只改数据（Equip.shoes），不改绘制代码。
   for (const mat of SHOE_MATERIALS) {
     for (const side of [false, true]) {
-      out.push({ name: shoeSpriteName(mat, side), w: 8, h: 8, draw: (q) => drawShoe(q, mat, side) });
+      out.push({
+        name: shoeSpriteName(mat, side),
+        w: 8,
+        h: 8,
+        draw: (q) => drawShoe(q, mat, side),
+      });
     }
   }
-  out.push({ name: 'partShadow', w: 32, h: 16, draw: (p) => drawPart(p, 'shadow') });
-  out.push({ name: 'decalBlood', w: 32, h: 32, draw: (p) => drawPart(p, 'decal') });
+  out.push({
+    name: 'partShadow',
+    w: 32,
+    h: 16,
+    draw: (p) => drawPart(p, 'shadow'),
+  });
+  out.push({
+    name: 'decalBlood',
+    w: 32,
+    h: 32,
+    draw: (p) => drawPart(p, 'decal'),
+  });
 
   const fx: Record<string, [number, number]> = {
-    slash: [48, 5], impact: [48, 6], fireball: [16, 4], shadow: [16, 4], spark: [16, 4], blood: [24, 3],
+    slash: [48, 5],
+    impact: [48, 6],
+    fireball: [16, 4],
+    shadow: [16, 4],
+    spark: [16, 4],
+    blood: [24, 3],
   };
   for (const [kind, [size, count]] of Object.entries(fx)) {
     const h = kind === 'slash' || kind === 'impact' ? 48 : size;
@@ -516,18 +726,21 @@ function buildSpecs(): Spec[] {
       out.push({ name, w: size, h, draw: (p) => drawFx(p, kind, i, count) });
     }
   }
-  return out;
+  return out.concat(upgradeSpecs(drawProp, drawWeapon));
 }
 
 function hash(s: string): number {
   let h = 2166136261;
-  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  for (let i = 0; i < s.length; i++)
+    h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return h >>> 0;
 }
 
 /** 行式装箱：按高度降序，帧间留 2px gutter。 */
 export function buildProceduralAtlas(): BuiltAtlas {
-  const specs = buildSpecs().sort((a, b) => b.h - a.h || a.name.localeCompare(b.name));
+  const specs = buildSpecs().sort(
+    (a, b) => b.h - a.h || a.name.localeCompare(b.name),
+  );
   const ATLAS_W = 1024;
   const GUTTER = 2;
   // 先算排布，再一次性开 canvas，避免二次拷贝。

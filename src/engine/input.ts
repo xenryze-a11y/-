@@ -14,15 +14,18 @@ export const BTN = {
   DEBUG: 1 << 5,
   RESTART: 1 << 6,
   SHOES: 1 << 7,
+  USE: 1 << 8,
+  DROP: 1 << 9,
 } as const;
 
 export interface InputState {
-  /** 归一化前的方向，长度 0~1（摇杆半推 = 慢走）。 */
+  /** 方向及推力，长度 0~1（摇杆半推 = 线性慢走）。 */
   move: Vec2;
   /** 屏幕坐标下的鼠标位置；转世界方向由组装层用 Camera 做。 */
   pointer: Vec2;
   down: number;
   pressed: number;
+  aimActive: boolean;
 }
 
 export class Input {
@@ -30,6 +33,9 @@ export class Input {
   private pressedBits = 0;
   private downBits = 0;
   readonly pointer: Vec2 = vec();
+  private aimUntil = 0;
+  private readonly touchAxis: Vec2 = vec();
+  private touchActive = false;
 
   constructor(private readonly target: HTMLElement) {
     window.addEventListener('keydown', this.onKeyDown);
@@ -37,15 +43,22 @@ export class Input {
     target.addEventListener('pointermove', this.onPointerMove);
     target.addEventListener('pointerdown', this.onPointerDown);
     window.addEventListener('pointerup', this.onPointerUp);
+    target.addEventListener('pointercancel', this.onBlur);
     target.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('blur', this.onBlur);
   }
 
   private onKeyDown = (e: KeyboardEvent): void => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
     if (!this.keys.has(k)) this.press(k);
     this.keys.add(k);
-    if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'tab'].includes(k)) e.preventDefault();
+    if (
+      [' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'tab'].includes(
+        k,
+      )
+    )
+      e.preventDefault();
   };
 
   private onKeyUp = (e: KeyboardEvent): void => {
@@ -55,11 +68,13 @@ export class Input {
 
   private onPointerMove = (e: PointerEvent): void => {
     const r = this.target.getBoundingClientRect();
+    this.aimUntil = performance.now() + 1800;
     this.pointer.x = e.clientX - r.left;
     this.pointer.y = e.clientY - r.top;
   };
 
   private onPointerDown = (e: PointerEvent): void => {
+    this.onPointerMove(e);
     if (e.button === 0) this.set(BTN.ATTACK, true);
     if (e.button === 2) this.set(BTN.CAST, true);
   };
@@ -72,6 +87,10 @@ export class Input {
   private onBlur = (): void => {
     this.keys.clear();
     this.downBits = 0;
+    this.pressedBits = 0;
+    this.touchActive = false;
+    this.touchAxis.x = 0;
+    this.touchAxis.y = 0;
   };
 
   private set(bit: number, isDown: boolean): void {
@@ -83,25 +102,49 @@ export class Input {
     }
   }
 
-  private press(k: string): void {
-    if (k === ' ') this.set(BTN.DODGE, true);
-    else if (k === '1') this.set(BTN.SWORD, true);
-    else if (k === '2') this.set(BTN.STAFF, true);
-    else if (k === 'b') this.set(BTN.SHOES, true);
-    else if (k === 'f3') this.set(BTN.DEBUG, true);
-    else if (k === 'r') this.set(BTN.RESTART, true);
+  reset(): void {
+    this.onBlur();
   }
-
+  setButton(bit: number, down: boolean): void {
+    this.set(bit, down);
+  }
+  setPointerXY(x: number, y: number): void {
+    this.pointer.x = x;
+    this.pointer.y = y;
+  }
+  setTouchAxis(x: number, y: number): void {
+    const length = Math.max(1, Math.hypot(x, y));
+    this.touchAxis.x = x / length;
+    this.touchAxis.y = y / length;
+    this.touchActive = x !== 0 || y !== 0;
+  }
+  get aiming(): boolean {
+    return performance.now() < this.aimUntil;
+  }
+  private keyBit(k: string): number {
+    return k === ' '
+      ? BTN.DODGE
+      : k === 'f'
+        ? BTN.CAST
+        : k === 'x'
+          ? BTN.USE
+          : k === 'q'
+            ? BTN.DROP
+            : k === 'f3'
+              ? BTN.DEBUG
+              : 0;
+  }
+  private press(k: string): void {
+    const bit = this.keyBit(k);
+    if (bit) this.set(bit, true);
+  }
   private release(k: string): void {
-    if (k === ' ') this.set(BTN.DODGE, false);
-    else if (k === '1') this.set(BTN.SWORD, false);
-    else if (k === '2') this.set(BTN.STAFF, false);
-    else if (k === 'b') this.set(BTN.SHOES, false);
-    else if (k === 'f3') this.set(BTN.DEBUG, false);
-    else if (k === 'r') this.set(BTN.RESTART, false);
+    const bit = this.keyBit(k);
+    if (bit) this.set(bit, false);
   }
 
   private axis(): Vec2 {
+    if (this.touchActive) return { ...this.touchAxis };
     const k = this.keys;
     let x = 0;
     let y = 0;
@@ -121,6 +164,7 @@ export class Input {
       pointer: { x: this.pointer.x, y: this.pointer.y },
       down: this.downBits,
       pressed: this.pressedBits,
+      aimActive: this.aiming,
     };
     this.pressedBits = 0;
     return s;

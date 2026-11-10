@@ -42,8 +42,13 @@ export class Level {
   readonly southWalls: Uint8Array;
   readonly spawn: Vec2 = { x: 0, y: 0 };
   private readonly blockers: Blocker[] = [];
+  revision = 0;
 
-  constructor(readonly w: number, readonly h: number, seed = 20261109) {
+  constructor(
+    readonly w: number,
+    readonly h: number,
+    seed = 20261109,
+  ) {
     this.tiles = new Uint8Array(w * h);
     this.southWalls = new Uint8Array(w * h);
     this.generate(seed);
@@ -72,11 +77,31 @@ export class Level {
 
   addBlocker(x: number, y: number, r: number): void {
     this.blockers.push({ x, y, r });
+    this.revision++;
+  }
+
+  removeBlocker(x: number, y: number): void {
+    const i = this.blockers.findIndex(
+      (b) => Math.hypot(b.x - x, b.y - y) < 0.01,
+    );
+    if (i >= 0) {
+      this.blockers.splice(i, 1);
+      this.revision++;
+    }
+  }
+
+  blocked(x: number, y: number, r = 0): boolean {
+    if (this.terrainBlocked(x, y, r)) return true;
+    if (r <= 0) return false;
+    return this.blockers.some((b) => Math.hypot(x - b.x, y - b.y) < r + b.r);
   }
 
   /** 圆-AABB 最近点判定。r=0 要单独处理，否则恒假、投射物会穿墙。 */
-  blocked(x: number, y: number, r = 0): boolean {
-    if (r <= 0) return this.solidTile(this.at(Math.floor(x / TILE), Math.floor(y / TILE)));
+  terrainBlocked(x: number, y: number, r = 0): boolean {
+    if (r <= 0)
+      return this.solidTile(
+        this.at(Math.floor(x / TILE), Math.floor(y / TILE)),
+      );
     const minX = Math.floor((x - r) / TILE);
     const maxX = Math.floor((x + r) / TILE);
     const minY = Math.floor((y - r) / TILE);
@@ -91,23 +116,45 @@ export class Level {
         if (dx * dx + dy * dy < r * r) return true;
       }
     }
-    for (const b of this.blockers) {
-      const dx = x - b.x;
-      const dy = y - b.y;
-      const rr = r + b.r;
-      if (dx * dx + dy * dy < rr * rr) return true;
-    }
     return false;
   }
 
-  /** 半格步进的视线采样，给亡灵法师判断能不能隔墙施法。 */
+  /** Supercover 网格遍历：检查整条线经过的瓦片，包括恰好擦过的对角墙角。 */
   lineClear(a: Vec2, b: Vec2): boolean {
-    const step = TILE / 2;
-    const d = Math.hypot(b.x - a.x, b.y - a.y);
-    const n = Math.ceil(d / step);
-    for (let i = 1; i < n; i++) {
-      const t = i / n;
-      if (this.blocked(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, 0)) return false;
+    let x = Math.floor(a.x / TILE),
+      y = Math.floor(a.y / TILE);
+    const endX = Math.floor(b.x / TILE),
+      endY = Math.floor(b.y / TILE);
+    const dx = b.x - a.x,
+      dy = b.y - a.y,
+      sx = Math.sign(dx),
+      sy = Math.sign(dy);
+    const deltaX = dx ? TILE / Math.abs(dx) : Infinity,
+      deltaY = dy ? TILE / Math.abs(dy) : Infinity;
+    let maxX = dx
+      ? ((sx > 0 ? (x + 1) * TILE : x * TILE) - a.x) / dx
+      : Infinity;
+    let maxY = dy
+      ? ((sy > 0 ? (y + 1) * TILE : y * TILE) - a.y) / dy
+      : Infinity;
+    const solid = (xx: number, yy: number): boolean =>
+      this.solidTile(this.at(xx, yy));
+    if (solid(x, y)) return false;
+    while (x !== endX || y !== endY) {
+      if (Math.abs(maxX - maxY) < 1e-10) {
+        if (solid(x + sx, y) || solid(x, y + sy)) return false;
+        x += sx;
+        y += sy;
+        maxX += deltaX;
+        maxY += deltaY;
+      } else if (maxX < maxY) {
+        x += sx;
+        maxX += deltaX;
+      } else {
+        y += sy;
+        maxY += deltaY;
+      }
+      if (solid(x, y)) return false;
     }
     return true;
   }
@@ -131,7 +178,8 @@ export class Level {
       for (let y = cy - rad; y <= cy + rad; y++) {
         for (let x = cx - rad; x <= cx + rad; x++) {
           const d = Math.hypot(x - cx, y - cy);
-          if (d <= rad + (rng() - 0.5) * 2 && this.at(x, y) === Tile.GRASS) this.set(x, y, t);
+          if (d <= rad + (rng() - 0.5) * 2 && this.at(x, y) === Tile.GRASS)
+            this.set(x, y, t);
         }
       }
     };
@@ -147,8 +195,20 @@ export class Level {
       this.set(this.w - 1, y, Tile.WALL);
     }
 
-    for (let i = 0; i < 26; i++) brush(2 + pick(this.w - 4), 2 + pick(this.h - 4), 2 + pick(4), rng() < 0.5 ? Tile.DIRT : Tile.STONE);
-    for (let i = 0; i < 5; i++) brush(4 + pick(this.w - 8), 4 + pick(this.h - 8), 2 + pick(3), Tile.WATER);
+    for (let i = 0; i < 26; i++)
+      brush(
+        2 + pick(this.w - 4),
+        2 + pick(this.h - 4),
+        2 + pick(4),
+        rng() < 0.5 ? Tile.DIRT : Tile.STONE,
+      );
+    for (let i = 0; i < 5; i++)
+      brush(
+        4 + pick(this.w - 8),
+        4 + pick(this.h - 8),
+        2 + pick(3),
+        Tile.WATER,
+      );
 
     // 十字土路，保证地图连通、跑起来有参照物。
     const roadY = Math.floor(this.h / 2);
@@ -168,14 +228,16 @@ export class Level {
       const oy = 4 + pick(this.h - bh - 8);
       for (let y = oy; y < oy + bh; y++) {
         for (let x = ox; x < ox + bw; x++) {
-          const edge = x === ox || x === ox + bw - 1 || y === oy || y === oy + bh - 1;
+          const edge =
+            x === ox || x === ox + bw - 1 || y === oy || y === oy + bh - 1;
           this.set(x, y, edge ? Tile.WALL : Tile.FLOOR);
         }
       }
       const doorX = ox + Math.floor(bw / 2);
       this.set(doorX, oy + bh - 1, Tile.FLOOR);
       for (let x = ox; x < ox + bw; x++) {
-        if (this.at(x, oy + bh - 1) === Tile.WALL) this.southWalls[(oy + bh - 1) * this.w + x] = 1;
+        if (this.at(x, oy + bh - 1) === Tile.WALL)
+          this.southWalls[(oy + bh - 1) * this.w + x] = 1;
       }
       // 屋子里别刷怪，顺手把出生点附近的草清干净。
     }

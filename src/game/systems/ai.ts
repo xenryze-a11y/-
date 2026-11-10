@@ -1,94 +1,191 @@
-/**
- * 亡者 AI：索敌 → 追击/保持距离 → 分离 → 近身攻击。
- * 对应 goengine 的 engine/sim/ai.go，三种 behavior 由 data.ts 数值驱动。
- * 分离必须两段式（先算完所有推力，再统一 setPos），否则遍历中改空间索引会漏怪。
- */
-import { angle, norm, type Vec2 } from '../../engine/math';
+/** 共用目标距离场绕墙，分离推力仍先全算完，再统一写位置。 */
+import { angle, norm, dist, type Vec2 } from '../../engine/math';
+import { TILE, type Level } from '../../engine/level';
 import { TAG } from '../components';
 import { CFG } from '../data';
 import { applyDamage, spawnProjectile } from './combat';
 import type { Ctx } from './context';
 
-export function updateAI(ctx: Ctx, dt: number): void {
-  if (ctx.gameOver) return;
-  const mobs = ctx.world.withTag(TAG.MOB);
-  const pp = ctx.world.pos(ctx.player);
-
-  // 第一段：只算分离力，不动位置。
-  const sep = new Map<number, Vec2>();
-  for (let i = 0; i < mobs.length; i++) {
-    const a = ctx.world.pos(mobs[i]);
-    for (let j = i + 1; j < mobs.length; j++) {
-      const b = ctx.world.pos(mobs[j]);
-      const dx = a.x - b.x;
-      const dy = a.y - b.y;
-      const d = Math.hypot(dx, dy);
-      if (d < 0.001 || d > 26) continue;
-      const push = (26 - d) / 26;
-      const ux = dx / d * push;
-      const uy = dy / d * push;
-      const sa = sep.get(mobs[i]) ?? { x: 0, y: 0 };
-      const sb = sep.get(mobs[j]) ?? { x: 0, y: 0 };
-      sep.set(mobs[i], { x: sa.x + ux, y: sa.y + uy });
-      sep.set(mobs[j], { x: sb.x - ux, y: sb.y - uy });
+interface Field {
+  distances: Int16Array;
+  tx: number;
+  ty: number;
+  time: number;
+  revision: number;
+}
+const fields = new WeakMap<Level, Field>();
+function pathField(ctx: Ctx): Int16Array {
+  const l = ctx.level,
+    pos = ctx.world.pos(ctx.player),
+    tx = Math.floor(pos.x / TILE),
+    ty = Math.floor(pos.y / TILE),
+    old = fields.get(l);
+  if (
+    old &&
+    old.tx === tx &&
+    old.ty === ty &&
+    old.revision === l.revision &&
+    ctx.world.time - old.time < 0.8
+  )
+    return old.distances;
+  const distances = new Int16Array(l.w * l.h);
+  distances.fill(-1);
+  const queue = [ty * l.w + tx];
+  distances[queue[0]] = 0;
+  for (let head = 0; head < queue.length; head++) {
+    const cell = queue[head],
+      x = cell % l.w,
+      y = Math.floor(cell / l.w);
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const xx = x + dx,
+        yy = y + dy;
+      if (xx < 1 || yy < 1 || xx >= l.w - 1 || yy >= l.h - 1) continue;
+      const next = yy * l.w + xx;
+      if (distances[next] >= 0 || l.blocked(xx * TILE + 16, yy * TILE + 16, 9))
+        continue;
+      distances[next] = distances[cell] + 1;
+      queue.push(next);
     }
   }
-
-  // 第二段：统一写位置。
-  for (const e of mobs) {
-    // 同一模拟步里刚被打死的怪还在 alive 集合里（删除统一在 flush），别让它再动一下。
-    if (ctx.world.isPendingDeath(e)) continue;
-    const m = ctx.s.mob.get(e);
-    const f = ctx.s.facing.get(e);
-    if (!m || !f) continue;
-    const p = ctx.world.pos(e);
-    const r = ctx.s.radius.get(e)?.r ?? 10;
-    const toPlayer = { x: pp.x - p.x, y: pp.y - p.y };
-    const d = Math.hypot(toPlayer.x, toPlayer.y);
-    const dir = norm(toPlayer);
-    m.think -= dt;
-
-    let speed = m.speed;
-    let moveDir: Vec2 = { x: 0, y: 0 };
-    const aggroed = d <= m.aggro * 1.6;
-
-    if (m.kind === 'caster' && aggroed) {
-      // 亡灵法师：太近后退、太远靠近、射程内站定放暗影弹。
-      if (d < 130) moveDir = { x: -dir.x, y: -dir.y };
-      else if (d > 200) moveDir = dir;
-      if (d < m.atkRange && m.atkCd <= 0 && ctx.level.lineClear(p, pp)) {
-        spawnProjectile(ctx, e, angle(dir), 'shadow', 190, m.dmg, false);
-        m.atkCd = CFG.mob.caster.atkCd;
-        m.attackAnim = 0.24;
-        ctx.world.emit({ kind: 'cast', entity: e, x: p.x, y: p.y, angle: angle(dir) });
+  fields.set(l, {
+    distances,
+    tx,
+    ty,
+    time: ctx.world.time,
+    revision: l.revision,
+  });
+  return distances;
+}
+export function updateAI(ctx: Ctx, dt: number): void {
+  if (ctx.gameOver) return;
+  const ids = ctx.world.withTag(TAG.MOB),
+    player = ctx.world.pos(ctx.player),
+    l = ctx.level,
+    field = pathField(ctx),
+    sep = new Map<number, Vec2>();
+  for (let i = 0; i < ids.length; i++) {
+    if (ctx.world.isPendingDeath(ids[i])) continue;
+    const a = ctx.world.pos(ids[i]);
+    for (let j = i + 1; j < ids.length; j++) {
+      if (ctx.world.isPendingDeath(ids[j])) continue;
+      const b = ctx.world.pos(ids[j]),
+        dx = a.x - b.x,
+        dy = a.y - b.y,
+        d = Math.hypot(dx, dy);
+      if (d < 0.001 || d >= 23) continue;
+      const push = (23 - d) * 1.9,
+        sa = sep.get(ids[i]) || { x: 0, y: 0 },
+        sb = sep.get(ids[j]) || { x: 0, y: 0 };
+      sep.set(ids[i], { x: sa.x + (dx / d) * push, y: sa.y + (dy / d) * push });
+      sep.set(ids[j], { x: sb.x - (dx / d) * push, y: sb.y - (dy / d) * push });
+    }
+  }
+  for (const id of ids) {
+    if (ctx.world.isPendingDeath(id)) continue;
+    const m = ctx.s.mob.get(id)!,
+      pos = ctx.world.pos(id),
+      f = ctx.s.facing.get(id)!;
+    if ((m.frozen || 0) > 0) continue;
+    const distance = dist(pos, player),
+      direct = norm({ x: player.x - pos.x, y: player.y - pos.y }),
+      visible = l.lineClear(pos, player),
+      active = distance < m.aggro * 1.65;
+    let direction: Vec2 = { x: 0, y: 0 },
+      speed = m.speed * ((m.slow || 0) > 0 ? 0.43 : 1);
+    if ((m.windup || 0) > 0) {
+      m.windup! -= dt;
+      speed *= 0.15;
+      if (m.windup! <= 0) {
+        if (m.kind === 'caster') {
+          if (visible)
+            spawnProjectile(
+              ctx,
+              id,
+              angle(direct),
+              'shadow',
+              190,
+              m.dmg,
+              false,
+            );
+        } else if (distance < 44 && visible)
+          applyDamage(ctx, ctx.player, m.dmg, id, direct);
+        m.atkCd = CFG.mob[m.kind].atkCd;
+        m.attackAnim = 0.25;
       }
-    } else if (aggroed) {
-      moveDir = dir;
-      if (m.kind === 'lunge') {
-        // think 末尾 0.28 秒冲刺，其余时间慢行（Go 版 dart 行为同款节奏）。
-        if (m.think > 0 && m.think < 0.28 && d < m.aggro) speed *= 2.3;
+    } else if (active) {
+      f.angle = angle(direct);
+      if (m.kind === 'caster' && visible)
+        direction =
+          distance < 125
+            ? { x: -direct.x, y: -direct.y }
+            : distance > 190
+              ? direct
+              : { x: 0, y: 0 };
+      else if (distance > 27) {
+        if (visible) direction = direct;
+        else {
+          const x = Math.floor(pos.x / TILE),
+            y = Math.floor(pos.y / TILE);
+          let best = Infinity,
+            target: Vec2 | null = null;
+          for (const [dx, dy] of [
+            [0, 0],
+            [1, 0],
+            [-1, 0],
+            [0, 1],
+            [0, -1],
+          ]) {
+            const xx = x + dx,
+              yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= l.w || yy >= l.h) continue;
+            const value = field[yy * l.w + xx],
+              point = { x: xx * TILE + 16, y: yy * TILE + 16 };
+            if (
+              value < 0 ||
+              l.blocked(point.x, point.y, 9) ||
+              !l.lineClear(pos, point)
+            )
+              continue;
+            const score = value * 40 + dist(pos, point);
+            if (score < best) {
+              best = score;
+              target = point;
+            }
+          }
+          if (target)
+            direction = norm({ x: target.x - pos.x, y: target.y - pos.y });
+        }
       }
-    } else {
-      // 脱战回出生点附近晃，别整张地图一起涌过来。
-      const home = norm({ x: m.home.x - p.x, y: m.home.y - p.y });
-      if (Math.hypot(m.home.x - p.x, m.home.y - p.y) > 40) moveDir = home;
+      if (m.kind === 'lunge' && distance > 65 && distance < 210 && visible) {
+        m.charge = (m.charge || 0) + dt;
+        if (m.charge % 2.2 > 1.75) speed *= 2.1;
+      }
+      if (
+        m.atkCd <= 0 &&
+        visible &&
+        distance < (m.kind === 'caster' ? 210 : 40)
+      ) {
+        m.windup = m.kind === 'caster' ? 0.55 : 0.3;
+        m.attackAnim = m.windup;
+      }
+    } else if (dist(pos, m.home) > 20) {
+      direction = norm({ x: m.home.x - pos.x, y: m.home.y - pos.y });
       speed *= 0.35;
     }
-    if (m.think <= 0) m.think = m.kind === 'lunge' ? 1.7 : 1.2;
-
-    const push = sep.get(e);
-    const vx = moveDir.x * speed + (push?.x ?? 0) * 55;
-    const vy = moveDir.y * speed + (push?.y ?? 0) * 55;
-    const next = ctx.level.move(p, vx * dt, vy * dt, r);
-    ctx.world.setPos(e, next);
-    f.angle = aggroed ? angle(dir) : f.angle;
-
-    // 近身攻击：体表外再延伸 atkRange，不是圆心重叠才打。
-    const pr = ctx.s.radius.get(ctx.player)?.r ?? 10;
-    if (m.kind !== 'caster' && d <= r + pr + m.atkRange && m.atkCd <= 0) {
-      applyDamage(ctx, ctx.player, m.dmg, e);
-      m.atkCd = CFG.mob[m.kind].atkCd;
-      m.attackAnim = 0.22;
-    }
+    const push = sep.get(id);
+    ctx.world.setPos(
+      id,
+      l.move(
+        pos,
+        (direction.x * speed + (push?.x || 0)) * dt,
+        (direction.y * speed + (push?.y || 0)) * dt,
+        10,
+      ),
+    );
   }
 }

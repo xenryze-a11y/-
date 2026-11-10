@@ -1,23 +1,37 @@
 /**
  * 图集加载与切帧。对应 goengine 的 backend/atlas.go + game/art/registry.go。
  *
- * 优先级：public/assets/atlas.png + atlas.json 存在就用外部美术，否则程序化生成。
+ * 默认合成程序化场景与内嵌法杖；?externalAtlas 显式启用完整外部图集，缺帧整套回退。
  * 所有部件共享一个 TextureSource（一张图集），Pixi 才能批处理；切出来的 Texture 只是 frame 不同。
  * get() 查不到名字返回白点而不是抛错 —— 换皮时漏一两张不该让整局崩掉。
  */
 import { Rectangle, Texture } from 'pixi.js';
 import { buildProceduralAtlas, type AtlasFrame, type BuiltAtlas } from './art';
+import { applyGeneratedStaves } from '../game/generated-staves';
 import { FX_ANIMS } from '../game/data';
 
 const BASE = import.meta.env.BASE_URL;
 
 export interface AtlasJson {
-  meta: { image: string; size: { w: number; h: number }; scale?: number; note?: string };
+  meta: {
+    image: string;
+    size: { w: number; h: number };
+    scale?: number;
+    note?: string;
+  };
   frames: Record<string, AtlasFrame | { frame: AtlasFrame }>;
-  anims?: Record<string, { frames: string[]; fps: number; loop: boolean; scale: number }>;
+  anims?: Record<
+    string,
+    { frames: string[]; fps: number; loop: boolean; scale: number }
+  >;
 }
 
 async function tryExternal(): Promise<BuiltAtlas | null> {
+  if (
+    location.protocol === 'file:' ||
+    !new URLSearchParams(location.search).has('externalAtlas')
+  )
+    return null;
   try {
     const res = await fetch(`${BASE}assets/atlas.json`, { cache: 'no-cache' });
     if (!res.ok) return null;
@@ -47,27 +61,55 @@ async function tryExternal(): Promise<BuiltAtlas | null> {
 export class TextureAtlas {
   readonly canvas: HTMLCanvasElement;
   readonly frames: Record<string, AtlasFrame>;
+  readonly generatedStaves: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
-  constructor(built: BuiltAtlas, sourceKind: 'procedural' | 'external') {
+  constructor(
+    built: BuiltAtlas,
+    sourceKind: 'procedural' | 'external',
+    generatedStaves = false,
+  ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
     this.sourceKind = sourceKind;
+    this.generatedStaves = generatedStaves;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
     base.source.autoGenerateMipmaps = false;
     for (const [name, f] of Object.entries(this.frames)) {
-      this.textures.set(name, new Texture({ source: base.source, frame: new Rectangle(f.x, f.y, f.w, f.h) }));
+      this.textures.set(
+        name,
+        new Texture({
+          source: base.source,
+          frame: new Rectangle(f.x, f.y, f.w, f.h),
+        }),
+      );
     }
   }
 
   static async load(): Promise<TextureAtlas> {
     const external = await tryExternal();
-    if (external) return new TextureAtlas(external, 'external');
-    console.info('[atlas] 未发现外部美术，使用内置程序化图集（可用 __ASHEN__.dumpAtlas() 导出模板）');
-    return new TextureAtlas(buildProceduralAtlas(), 'procedural');
+    const built = buildProceduralAtlas();
+    const generated = await applyGeneratedStaves(built);
+    if (
+      external &&
+      Object.entries(built.frames).every(
+        ([name, frame]) =>
+          external.frames[name]?.w === frame.w &&
+          external.frames[name]?.h === frame.h,
+      )
+    )
+      return new TextureAtlas(external, 'external');
+    if (external)
+      console.warn(
+        '[atlas] 外部图集帧清单或尺寸与当前版本不匹配，回退到完整内置图集',
+      );
+    console.info(
+      '[atlas] 使用内置像素图集（程序化场景 + 内嵌法杖素材）（可用 __ASHEN__.dumpAtlas() 导出模板）',
+    );
+    return new TextureAtlas(built, 'procedural', generated);
   }
 
   has(name: string): boolean {
@@ -77,7 +119,8 @@ export class TextureAtlas {
   get(name: string): Texture {
     const t = this.textures.get(name);
     if (!t) {
-      if (name !== '__missing__') console.warn(`[atlas] 缺贴图 ${name}，降级为白点`);
+      if (name !== '__missing__')
+        console.warn(`[atlas] 缺贴图 ${name}，降级为白点`);
       return Texture.WHITE;
     }
     return t;
@@ -89,9 +132,17 @@ export class TextureAtlas {
       console.warn('[atlas] 当前用的是外部图集，无需导出');
       return;
     }
-    const anims: Record<string, { frames: string[]; fps: number; loop: boolean; scale: number }> = {};
+    const anims: Record<
+      string,
+      { frames: string[]; fps: number; loop: boolean; scale: number }
+    > = {};
     for (const [k, a] of Object.entries(FX_ANIMS)) {
-      anims[k] = { frames: [...a.frames], fps: a.fps, loop: a.loop, scale: a.scale };
+      anims[k] = {
+        frames: [...a.frames],
+        fps: a.fps,
+        loop: a.loop,
+        scale: a.scale,
+      };
     }
     const json: AtlasJson = {
       meta: {
@@ -106,7 +157,10 @@ export class TextureAtlas {
     this.canvas.toBlob((blob) => {
       if (!blob) return;
       download(blob, 'atlas.png');
-      download(new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' }), 'atlas.json');
+      download(
+        new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' }),
+        'atlas.json',
+      );
     }, 'image/png');
   }
 }

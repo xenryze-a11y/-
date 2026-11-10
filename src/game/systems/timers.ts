@@ -19,6 +19,11 @@ export function tickTimers(ctx: Ctx, dt: number): void {
     p.castAnim = dec(p.castAnim);
     p.hurtFlash = dec(p.hurtFlash);
     p.invuln = dec(p.invuln);
+    for (const key of Object.keys(p.cooldowns) as (keyof typeof p.cooldowns)[])
+      p.cooldowns[key] = dec(p.cooldowns[key] || 0);
+    p.shield = dec(p.shield);
+    if (!p.shield) p.shieldHp = 0;
+    p.noManaCd = dec(p.noManaCd);
     p.mana = Math.min(p.maxMana, p.mana + CFG.player.manaRegen * dt);
   });
 
@@ -26,6 +31,8 @@ export function tickTimers(ctx: Ctx, dt: number): void {
     m.atkCd = dec(m.atkCd);
     m.attackAnim = dec(m.attackAnim);
     m.hurtFlash = dec(m.hurtFlash);
+    m.slow = dec(m.slow || 0);
+    m.frozen = dec(m.frozen || 0);
   });
 
   ctx.s.dodge.forEach((_e, d) => {

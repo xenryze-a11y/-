@@ -4,6 +4,8 @@
  * 那条隔离保证「有没有渲染」不影响模拟结果，也是以后接服务端权威的前提。
  */
 import type { Store, World } from '../engine/ecs';
+import type { InventoryState } from './inventory';
+import type { SkillId, ItemId } from './items';
 import type { Vec2 } from '../engine/math';
 
 export const TAG = {
@@ -28,6 +30,8 @@ export const C = {
   DODGE: 'dodge',
   LOOK: 'look',
   EQUIP: 'equip',
+  INVENTORY: 'inventory',
+  FIELD: 'field',
 } as const;
 
 export interface Radius {
@@ -58,6 +62,11 @@ export interface Player {
   kills: number;
   /** 本次挥砍的朝向，动画期间不跟着鼠标转，否则刀光会甩。 */
   swingAngle: number;
+  skill: SkillId;
+  cooldowns: Partial<Record<SkillId, number>>;
+  shield: number;
+  shieldHp: number;
+  noManaCd: number;
 }
 
 export type MobKind = 'shamble' | 'lunge' | 'caster';
@@ -73,6 +82,10 @@ export interface Mob {
   attackAnim: number;
   hurtFlash: number;
   home: Vec2;
+  slow?: number;
+  frozen?: number;
+  windup?: number;
+  charge?: number;
 }
 
 export interface Projectile {
@@ -85,6 +98,9 @@ export interface Projectile {
   owner: number;
   /** 'fireball' 命中会范围爆炸；'shadow' 是亡灵法师的暗影弹。 */
   kind: 'fireball' | 'shadow';
+  element?: SkillId;
+  pierce?: number;
+  hit?: number[];
 }
 
 export interface Prop {
@@ -95,9 +111,19 @@ export interface Prop {
 }
 
 export interface Pickup {
-  kind: 'mana' | 'health';
-  amount: number;
+  kind: ItemId;
+  count: number;
+  ignoreUntil?: number;
+  fullNotice?: number;
   bob: number;
+}
+
+export interface SpellField {
+  type: 'storm';
+  r: number;
+  life: number;
+  tick: number;
+  owner: number;
 }
 
 export interface Dodge {
@@ -139,6 +165,8 @@ export interface Stores {
   dodge: Store<Dodge>;
   look: Store<Look>;
   equip: Store<Equip>;
+  inventory: Store<InventoryState>;
+  field: Store<SpellField>;
 }
 
 export function createStores(w: World): Stores {
@@ -154,5 +182,7 @@ export function createStores(w: World): Stores {
     dodge: w.register<Dodge>(C.DODGE),
     look: w.register<Look>(C.LOOK),
     equip: w.register<Equip>(C.EQUIP),
+    inventory: w.register<InventoryState>(C.INVENTORY),
+    field: w.register<SpellField>(C.FIELD),
   };
 }

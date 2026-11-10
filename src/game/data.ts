@@ -8,11 +8,21 @@ import { TILE } from '../engine/level';
 import type { MobKind, ShoeMat } from './components';
 
 /** 鞋子是独立贴图，按「材质 × 视角」出图（Go 版 sprShoe<Mat>[Side] 同款）。 */
-export const SHOE_MATERIALS: ShoeMat[] = ['bare', 'cloth', 'leather', 'iron', 'zombieBare'];
+export const SHOE_MATERIALS: ShoeMat[] = [
+  'bare',
+  'cloth',
+  'leather',
+  'iron',
+  'zombieBare',
+];
 /** 玩家能换的四种；zombieBare 是亡者按腐肉色出的赤脚，不给玩家穿。 */
 export const PLAYER_SHOES: ShoeMat[] = ['bare', 'cloth', 'leather', 'iron'];
 export const SHOE_LABEL: Record<ShoeMat, string> = {
-  bare: '赤脚', cloth: '布鞋', leather: '皮靴', iron: '铁靴', zombieBare: '腐足',
+  bare: '赤脚',
+  cloth: '布鞋',
+  leather: '皮靴',
+  iron: '铁靴',
+  zombieBare: '腐足',
 };
 
 export const CFG = {
@@ -28,6 +38,7 @@ export const CFG = {
     castSlow: 0.72,
     manaRegen: 9,
     armor: 1,
+    hurtInvuln: 0.35,
   },
 
   sword: {
@@ -36,10 +47,11 @@ export const CFG = {
     dmg: 34,
     cd: 0.34,
     animDur: 0.22,
-    /** 右键旋风斩：整圈、伤害略低、冷却更长。 */
+    /** 右键旋风斩：整圈、范围略大、冷却更长。 */
     whirlArc: Math.PI * 2,
-    whirlDmg: 26,
-    whirlCd: 0.9,
+    whirlDmg: 40,
+    whirlCd: 1.2,
+    whirlRange: 68,
   },
 
   staff: {
@@ -65,12 +77,58 @@ export const CFG = {
   },
 
   mob: {
-    shamble: { hp: 55, speed: 43, aggro: 250, atkRange: 16, atkCd: 1.1, dmg: 9, armor: 0, radius: 10 },
-    lunge: { hp: 46, speed: 64, aggro: 300, atkRange: 15, atkCd: 1.3, dmg: 13, armor: 0, radius: 10 },
-    caster: { hp: 42, speed: 38, aggro: 340, atkRange: 210, atkCd: 2.0, dmg: 8, armor: 1, radius: 10 },
-  } satisfies Record<MobKind, { hp: number; speed: number; aggro: number; atkRange: number; atkCd: number; dmg: number; armor: number; radius: number }>,
+    shamble: {
+      hp: 55,
+      speed: 43,
+      aggro: 250,
+      atkRange: 16,
+      atkCd: 1.1,
+      dmg: 9,
+      armor: 0,
+      radius: 10,
+    },
+    lunge: {
+      hp: 46,
+      speed: 64,
+      aggro: 300,
+      atkRange: 15,
+      atkCd: 1.3,
+      dmg: 13,
+      armor: 0,
+      radius: 10,
+    },
+    caster: {
+      hp: 42,
+      speed: 38,
+      aggro: 340,
+      atkRange: 210,
+      atkCd: 2.0,
+      dmg: 8,
+      armor: 1,
+      radius: 10,
+    },
+  } satisfies Record<
+    MobKind,
+    {
+      hp: number;
+      speed: number;
+      aggro: number;
+      atkRange: number;
+      atkCd: number;
+      dmg: number;
+      armor: number;
+      radius: number;
+    }
+  >,
 
-  spawn: { mobs: 34, trees: 28, graves: 18, crates: 10, torches: 10, pickups: 10 },
+  spawn: {
+    mobs: 34,
+    trees: 28,
+    graves: 18,
+    crates: 10,
+    torches: 10,
+    pickups: 10,
+  },
 
   camera: { zoom: 2 },
 
@@ -80,12 +138,49 @@ export const CFG = {
 
 /** 序列帧只给特效用；走路是相位，不进这张表。 */
 export const FX_ANIMS: Record<string, FxAnim> = {
-  slash: { frames: ['slash_000', 'slash_001', 'slash_002', 'slash_003', 'slash_004'], fps: 20, loop: false, scale: 1 },
-  impact: { frames: ['impact_000', 'impact_001', 'impact_002', 'impact_003', 'impact_004', 'impact_005'], fps: 18, loop: false, scale: 1 },
-  fireball: { frames: ['fireball_000', 'fireball_001', 'fireball_002', 'fireball_003'], fps: 12, loop: true, scale: 1 },
-  shadow: { frames: ['shadow_000', 'shadow_001', 'shadow_002', 'shadow_003'], fps: 12, loop: true, scale: 1 },
-  spark: { frames: ['spark_000', 'spark_001', 'spark_002', 'spark_003'], fps: 18, loop: false, scale: 1 },
-  blood: { frames: ['blood_000', 'blood_001', 'blood_002'], fps: 14, loop: false, scale: 1 },
+  slash: {
+    frames: ['slash_000', 'slash_001', 'slash_002', 'slash_003', 'slash_004'],
+    fps: 20,
+    loop: false,
+    scale: 1,
+  },
+  impact: {
+    frames: [
+      'impact_000',
+      'impact_001',
+      'impact_002',
+      'impact_003',
+      'impact_004',
+      'impact_005',
+    ],
+    fps: 18,
+    loop: false,
+    scale: 1,
+  },
+  fireball: {
+    frames: ['fireball_000', 'fireball_001', 'fireball_002', 'fireball_003'],
+    fps: 12,
+    loop: true,
+    scale: 1,
+  },
+  shadow: {
+    frames: ['shadow_000', 'shadow_001', 'shadow_002', 'shadow_003'],
+    fps: 12,
+    loop: true,
+    scale: 1,
+  },
+  spark: {
+    frames: ['spark_000', 'spark_001', 'spark_002', 'spark_003'],
+    fps: 18,
+    loop: false,
+    scale: 1,
+  },
+  blood: {
+    frames: ['blood_000', 'blood_001', 'blood_002'],
+    fps: 14,
+    loop: false,
+    scale: 1,
+  },
 };
 
 export const PALETTE = {

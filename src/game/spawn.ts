@@ -3,6 +3,7 @@ import { World, type Entity } from '../engine/ecs';
 import { Level, TILE, Tile } from '../engine/level';
 import { makeRng, type Vec2 } from '../engine/math';
 import { createStores, TAG, type MobKind, type Stores } from './components';
+import { createInventory } from './inventory';
 import { CFG } from './data';
 
 export interface Scene {
@@ -22,8 +23,12 @@ function findSpot(level: Level, rng: () => number, minFromSpawn = 0): Vec2 {
   for (let i = 0; i < 400; i++) {
     const x = (2 + rng() * (level.w - 4)) * TILE;
     const y = (2 + rng() * (level.h - 4)) * TILE;
-    if (solidAt(level, x, y)) continue;
-    if (minFromSpawn > 0 && Math.hypot(x - level.spawn.x, y - level.spawn.y) < minFromSpawn) continue;
+    if (level.blocked(x, y, 12)) continue;
+    if (
+      minFromSpawn > 0 &&
+      Math.hypot(x - level.spawn.x, y - level.spawn.y) < minFromSpawn
+    )
+      continue;
     return { x, y };
   }
   return { x: level.spawn.x + 200, y: level.spawn.y };
@@ -35,9 +40,17 @@ export function buildScene(seed = CFG.seed): Scene {
   const level = new Level(CFG.map.w, CFG.map.h, seed);
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
 
-  const player = world.createAt([TAG.PLAYER, TAG.DAMAGEABLE], level.spawn.x, level.spawn.y);
+  const player = world.createAt(
+    [TAG.PLAYER, TAG.DAMAGEABLE],
+    level.spawn.x,
+    level.spawn.y,
+  );
   s.radius.set(player, { r: CFG.player.radius });
-  s.health.set(player, { hp: CFG.player.hp, max: CFG.player.hp, armor: CFG.player.armor });
+  s.health.set(player, {
+    hp: CFG.player.hp,
+    max: CFG.player.hp,
+    armor: CFG.player.armor,
+  });
   s.facing.set(player, { angle: Math.PI / 2 });
   s.player.set(player, {
     weapon: 'staff',
@@ -51,27 +64,88 @@ export function buildScene(seed = CFG.seed): Scene {
     invuln: 0,
     kills: 0,
     swingAngle: Math.PI / 2,
+    skill: 'ember',
+    cooldowns: {},
+    shield: 0,
+    shieldHp: 0,
+    noManaCd: 0,
   });
   s.dodge.set(player, { time: 0, cd: 0, invuln: 0, dir: { x: 0, y: 1 } });
-  s.look.set(player, { family: 'hero', scale: 1, showHealth: false, animated: true });
+  s.look.set(player, {
+    family: 'hero',
+    scale: 1,
+    showHealth: false,
+    animated: true,
+  });
   s.equip.set(player, { shoes: 'leather' });
+  s.inventory.set(player, createInventory());
 
   // 场景物件：静态贴图 + 圆形碰撞，注册进 Level 的 blockers。
-  const props: { sprite: string; w: number; h: number; r: number; blocks: boolean; count: number }[] = [
-    { sprite: 'propTree', w: 48, h: 64, r: 9, blocks: true, count: CFG.spawn.trees },
-    { sprite: 'propGrave', w: 24, h: 32, r: 7, blocks: true, count: CFG.spawn.graves },
-    { sprite: 'propCrate', w: 32, h: 32, r: 10, blocks: true, count: CFG.spawn.crates },
-    { sprite: 'propTorch', w: 16, h: 32, r: 0, blocks: false, count: CFG.spawn.torches },
+  const props: {
+    sprite: string;
+    w: number;
+    h: number;
+    r: number;
+    blocks: boolean;
+    count: number;
+  }[] = [
+    {
+      sprite: 'propTree',
+      w: 48,
+      h: 64,
+      r: 9,
+      blocks: true,
+      count: CFG.spawn.trees,
+    },
+    {
+      sprite: 'propGrave',
+      w: 24,
+      h: 32,
+      r: 7,
+      blocks: true,
+      count: CFG.spawn.graves,
+    },
+    {
+      sprite: 'propCrate',
+      w: 32,
+      h: 32,
+      r: 10,
+      blocks: true,
+      count: CFG.spawn.crates,
+    },
+    {
+      sprite: 'propTorch',
+      w: 16,
+      h: 32,
+      r: 0,
+      blocks: false,
+      count: CFG.spawn.torches,
+    },
     { sprite: 'propRock', w: 24, h: 24, r: 8, blocks: true, count: 10 },
   ];
   for (const def of props) {
     for (let i = 0; i < def.count; i++) {
       const p = findSpot(level, rng, 120);
       if (def.blocks) level.addBlocker(p.x, p.y, def.r);
-      const e = world.createAt([TAG.PROP, ...(def.blocks ? [TAG.DAMAGEABLE] : [])], p.x, p.y);
+      const e = world.createAt(
+        [TAG.PROP, ...(def.blocks ? [TAG.DAMAGEABLE] : [])],
+        p.x,
+        p.y,
+      );
       s.radius.set(e, { r: def.r || 6 });
-      s.prop.set(e, { sprite: def.sprite, w: def.w, h: def.h, blocks: def.blocks });
-      s.look.set(e, { family: 'prop', scale: 1, showHealth: false, animated: false, staticSprite: def.sprite });
+      s.prop.set(e, {
+        sprite: def.sprite,
+        w: def.w,
+        h: def.h,
+        blocks: def.blocks,
+      });
+      s.look.set(e, {
+        family: 'prop',
+        scale: 1,
+        showHealth: false,
+        animated: false,
+        staticSprite: def.sprite,
+      });
       if (def.blocks) s.health.set(e, { hp: 28, max: 28, armor: 0 });
     }
   }
@@ -81,9 +155,12 @@ export function buildScene(seed = CFG.seed): Scene {
     const p = findSpot(level, rng, 90);
     const kind = rng() < 0.5 ? 'mana' : 'health';
     const e = world.createAt([TAG.PICKUP], p.x, p.y);
-    s.pickup.set(e, { kind, amount: kind === 'mana' ? 35 : 30, bob: rng() * Math.PI * 2 });
+    s.pickup.set(e, { kind, count: 1, bob: rng() * Math.PI * 2 });
     s.look.set(e, {
-      family: 'pickup', scale: 1, showHealth: false, animated: false,
+      family: 'pickup',
+      scale: 1,
+      showHealth: false,
+      animated: false,
       staticSprite: kind === 'mana' ? 'pickupMana' : 'pickupHealth',
     });
   }
@@ -95,10 +172,20 @@ export function buildScene(seed = CFG.seed): Scene {
     const e = world.createAt([TAG.MOB, TAG.DAMAGEABLE], x, y);
     s.radius.set(e, { r: cfg.radius });
     s.health.set(e, { hp: cfg.hp, max: cfg.hp, armor: cfg.armor });
-    s.facing.set(e, { angle: Math.atan2(level.spawn.y - y, level.spawn.x - x) });
+    s.facing.set(e, {
+      angle: Math.atan2(level.spawn.y - y, level.spawn.x - x),
+    });
     s.mob.set(e, {
-      kind, speed: cfg.speed, aggro: cfg.aggro, atkRange: cfg.atkRange, atkCd: cfg.atkCd,
-      dmg: cfg.dmg, think: rng() * 1.5, attackAnim: 0, hurtFlash: 0, home: { x, y },
+      kind,
+      speed: cfg.speed,
+      aggro: cfg.aggro,
+      atkRange: cfg.atkRange,
+      atkCd: cfg.atkCd,
+      dmg: cfg.dmg,
+      think: rng() * 1.5,
+      attackAnim: 0,
+      hurtFlash: 0,
+      home: { x, y },
     });
     s.look.set(e, {
       family: kind === 'caster' ? 'caster' : 'zombie',
@@ -107,7 +194,9 @@ export function buildScene(seed = CFG.seed): Scene {
       animated: true,
     });
     // 行尸按腐肉色出赤脚（Go 版 spr<Rig>ShoeBare[Side] 同款），法师穿布鞋。
-    s.equip.set(e, { shoes: kind === 'caster' || rng() < 0.45 ? 'cloth' : 'zombieBare' });
+    s.equip.set(e, {
+      shoes: kind === 'caster' || rng() < 0.45 ? 'cloth' : 'zombieBare',
+    });
   };
 
   for (let i = 0; i < 5; i++) {
