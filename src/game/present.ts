@@ -8,6 +8,7 @@ import { fxFinished, fxFrameIndex, type FxAnim } from '../engine/animation';
 import type { TextureAtlas } from '../engine/atlas';
 import type { Camera } from '../engine/camera';
 import type { GameEvent } from '../engine/ecs';
+import { MageVfx } from './mage-vfx';
 import { BasketballVfx } from './basketball-vfx';
 import { PixelSpellVfx } from './pixel-spell-vfx';
 import type { Scene } from './spawn';
@@ -34,6 +35,7 @@ export class Presentation {
   private effects: Effect[] = [];
   private readonly pixels: PixelSpellVfx;
   private readonly basketball: BasketballVfx;
+  private readonly mage: MageVfx;
   private readonly decals: Sprite[] = [];
 
   constructor(
@@ -44,11 +46,17 @@ export class Presentation {
   ) {
     this.pixels = new PixelSpellVfx(fxLayer, decalLayer);
     this.basketball = new BasketballVfx(fxLayer, atlas);
+    this.mage = new MageVfx(decalLayer, fxLayer, atlas);
   }
 
   consume(events: GameEvent[]): void {
     for (const ev of events) {
       switch (ev.kind) {
+        case 'mage':
+          this.mage.consume(ev);
+          if (ev.stage === 'impact')
+            this.camera.shake(ev.ability === 'wave' ? 1 : 3, 0.16);
+          break;
         case 'basketball':
           this.basketball.consume(ev);
           this.pixels.consume({
@@ -160,6 +168,7 @@ export class Presentation {
     this.effects = [];
     this.pixels.clear();
     this.basketball.clear();
+    this.mage.clear();
     for (const d of this.decals) {
       this.decalLayer.removeChild(d);
       d.destroy();
@@ -170,6 +179,11 @@ export class Presentation {
   /** 只读组件投影护盾/预警；特效生命使用自己的渲染时钟。 */
   sync(scene: Scene, dt: number): void {
     this.pixels.sync(scene, dt);
+    this.mage.sync(scene, dt);
+  }
+
+  get mageStats() {
+    return this.mage.stats;
   }
 
   get basketballStats() {

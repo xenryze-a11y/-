@@ -669,7 +669,7 @@ function buildSpecs(): Spec[] {
     });
   }
   const propSizes: Record<string, [number, number]> = {
-    tree: [48, 64],
+    tree: [96, 128],
     grave: [24, 32],
     crate: [32, 32],
     torch: [16, 32],
@@ -687,6 +687,7 @@ function buildSpecs(): Spec[] {
       w,
       h,
       draw: (p) => {
+        if (kind === 'tree') p.ctx.scale(2, 2);
         drawProp(p, kind, hash(kind));
         detailProp(p, kind, hash(kind));
       },

@@ -64,6 +64,7 @@ app.ticker (真实 dt)
            updateAI        索敌 / 追击 / 分离 / 近战
            updateProjectiles  移动 / 撞墙 / 命中 / 爆炸
            updateFields    雷暴生命周期 / 周期伤害
+           updateMage      雷电法师电场 / 五段震荡 / 连射与环绕伤害
            updateSummons   篮球召唤追击 / 扫掠 / 引爆
            updateRules     拾取 / 补怪
            world.flush()   统一删除
@@ -133,3 +134,12 @@ updatePoison(ctx, fixed);
 ## 篮球召唤组件
 
 `Summon = {owner,target,life,age,angle}` 注册在 `s.summon`，新实体带 `TAG.SUMMON`，显示信息仍在 Look。`systems/basketball.ts` 在 fields 之后、rules / flush 之前推进：索敌与转向 → 4 像素分段移动 → 撞墙 / 命中 / 到期范围伤害 → 标量 basketball 事件 → destroy 排队。没有 DOM、Pixi、视频对象或定时回调。角色视频帧与生成字粒子的时钟只在表现层；左右键共享 `player.cooldowns.basketball`。
+
+
+## 雷电职业组件
+
+`MageState` 保存本局解锁、三技能独立 cooldown、随身电场剩余 / tick、大招剩余 / 连射 tick / 已发射数、环绕相位 / 命中 tick。环绕相位参与碰撞，所以属于模拟；渲染只读取。`ThunderWave` 保存起点、方向、下一段索引、tick 与已命中的 ID 数组，伤害不依赖动画播放。
+
+`syncMageUnlock` 只在真实获得 storm 物品后解锁。快捷栏内可直接选中法杖；在背包里时不能用选中下标取模误选其他物品。释放时再次检查选中的物品必须为 storm。换武器、丢下法杖不重置本局解锁或冷却；已释放法术继续完成，新一局全部重置。
+
+`mage` 标量事件只携带 ability / stage / 坐标 / 朝向。电球复用投射物扫掠，barrage 标记决定范围爆炸；后方出生点不可越墙。`s.wave` 删除仍须 destroy → flush。

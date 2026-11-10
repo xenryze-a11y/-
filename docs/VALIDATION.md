@@ -10,7 +10,7 @@ npm run build
 npm run export:standalone
 ```
 
-类型检查、25 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
+类型检查、34 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
 
 ## 浏览器流程
 
@@ -60,3 +60,20 @@ npm run export:standalone
 - 全新隔离断网文档成功解码视频切帧和生成“坤”字，并产生 5 个召唤物，HTTP(S) 请求为 0。无页面运行错误。
 
 新增截图：`basketball-summon.png`、`basketball-impact.png`、`gear-preview.png`。视频循环与素材生成来源详见 `SUMMON.md`，原始录屏未打包进游戏。
+
+
+## 古树祭坛、法杖职业与技能栏复验
+
+类型检查、34 项模拟回归、普通构建、单文件构建及导出通过。新增覆盖：扩区与法杖拾取、满包不提前解锁、储物格取得不误选快捷栏、装备门槛 / 独立冷却 / 无蓝拒绝、电场随身与无环绕球、五段震荡 / 每敌一次 / 墙体中止、15 球连续生成与独立高速环绕伤害、后方出生和爆炸视线、触屏短按释放后仍正确瞄准。
+
+生产预览 Chromium / Playwright 实际检查：
+
+- 72×48 区域、96×128 普通树、320×352 巨树与祭坛正常；新图标、电球、树帧全部共享原图集 TextureSource。
+- 菜单「探索古树祭坛」起步，实际按 W 走近拾取，无需从调试器凭空添加法杖；取得前职业未解锁，取得后第 3 格自动装备，恰好显示三枚职业按钮。
+- 鼠标点电场后无环绕球；F 推进震荡、R 身后继续生成投射物，周身显示 5 球。外圈 dashoffset 随模型剩余冷却递减，完整冷却结束时为 0、按钮恢复可用。暂停 0.3 秒时世界时间、cooldown、环进度完全不变。
+- 换成其他武器后三按钮收起，再点装备指引恢复，冷却不重置。背包合成 / 铁靴换装 / CPU 人物预览继续通过。
+- 表现 consume / sync、renderer.sync 前后组件、位置、alive、世界时间 JSON 完全一致。100 次电球爆炸事件后 burst / 粒子封顶 48 / 256，2 秒后归零；清理后环绕 Sprite 隐藏。普通 / 巨树冠遮挡 alpha≈0.33，走到树前恢复≈1。
+- 390×844 触屏摇杆真实走近取得法杖，三技能可点；其他武器保留触屏「武技」按钮，装备雷电法杖时不把它当作第四个职业键。844×390 的战斗栏 x≈506、right≈832、bottom≈326，物品栏 top≈342、bottom≈384，玩家脚底屏幕 Y≈220，不被底栏遮挡。
+- 最后复查手机旧冰霜特殊技、职业大招、侧边背包与横屏，无页面错误。独立断网单文件可解码新生图素材、拾取法杖并施放电场 / 大招，HTTP(S) 请求为 0。
+
+截图：`grove-profession.png`、`mage-field.png`、`mage-wave.png`、`mage-barrage.png`、`mage-mobile.png`。来源与切片说明见 `STORM_MAGE.md`，设计取舍见 D24–D26。受管浏览器的 file:// 限制与前文一致，离线以独立内嵌文档验证。

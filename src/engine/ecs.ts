@@ -71,6 +71,7 @@ export interface GameEvent {
     | 'cast'
     | 'spell'
     | 'basketball'
+    | 'mage'
     | 'impact'
     | 'hurt'
     | 'playerHurt'
@@ -83,6 +84,7 @@ export interface GameEvent {
     | 'ring'
     | 'bolt';
   element?: string;
+  ability?: string;
   stage?: 'cast' | 'impact';
   special?: boolean;
   entity?: Entity;

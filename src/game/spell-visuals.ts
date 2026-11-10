@@ -16,7 +16,7 @@ export const SPELL_COLORS: Record<
 > = {
   ember: { dark: 0x7e302c, mid: 0xe26736, light: 0xffb95f, core: 0xffedbd },
   frost: { dark: 0x314d7f, mid: 0x63b7db, light: 0xa5e7f1, core: 0xf0fbf0 },
-  storm: { dark: 0x5f4285, mid: 0xa18bdf, light: 0xdbb8fa, core: 0xffedac },
+  storm: { dark: 0x22465e, mid: 0x55b4cf, light: 0x9cece9, core: 0xeefff0 },
   ward: { dark: 0x35654e, mid: 0x79b18c, light: 0xc8e1a5, core: 0xfff0ca },
   blink: { dark: 0x433663, mid: 0x8b6dc4, light: 0xbca3ee, core: 0xcff3ef },
 };

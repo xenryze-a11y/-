@@ -13,7 +13,7 @@ npm run dev
 
 打开 `http://127.0.0.1:5173`。看到一片中世纪地图、蓝色法袍的法师、几只亡者 = 成功。
 
-素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，Q 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「重新启程」重置背包与地图。
+素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，G 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「重新启程」重置背包与地图。
 
 ## 1. 改一个数值（30 秒）
 
@@ -103,7 +103,12 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 
 `npm run export:standalone` 从当前源码更新根目录「直接可以玩的 .HTML」。不要继续修改上传的历史单文件，也不要复制整包 Pixi 到 src。外部美术需要完整匹配当前图集，并通过 `?externalAtlas` 显式启用。
 
-新入口：`items.ts`（内容）→ `inventory.ts` / `systems/magic.ts` / `loot.ts`（规则）→ `ui.ts` / `present.ts`（只读表现）。读 D15–D23 了解增强版的取舍。
+新入口：`items.ts`（内容）→ `inventory.ts` / `systems/magic.ts` / `loot.ts`（规则）→ `ui.ts` / `present.ts`（只读表现）。读 D15–D26 了解增强版的取舍。
 
 
 篮球入口是 `items.ts` → `systems/basketball.ts` → `basketball-content / assets / vfx.ts`，切帧原理与素材来源见 [SUMMON.md](SUMMON.md)。调整穿戴先看 `FOOT_ANCHORS / HAND_ANCHORS` 和 12×14 鞋贴图；必须同时检查世界角色与背包 CPU 预览，详见 D22。
+
+
+## 雷电法师与林地
+
+菜单「探索古树祭坛」便于直接试玩新区域，向祭坛走近取得雷电法杖后解锁。Q 电场、F / 右键五段震荡、R 身后连射 + 周身高速环绕；其他武器的 F / 武技保留。职业状态在 `s.mage`，波列在 `s.wave`，`updateMage` 插在 fields 之后、summons 之前。UI 不写冷却，环形 SVG 只读取剩余 / 总冷却。普通 / 巨树与图标原稿在 `assets/source`，运行时仅内嵌规范化小图。详见 [STORM_MAGE.md](STORM_MAGE.md)。

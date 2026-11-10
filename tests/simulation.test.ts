@@ -1,4 +1,13 @@
 import { test } from 'node:test';
+import {
+  castMage,
+  updateMage,
+  syncMageUnlock,
+  mageEquipped,
+} from '../src/game/systems/mage';
+import { tickTimers } from '../src/game/systems/timers';
+import { MAGE, MAGE_SKILLS, GROVE } from '../src/game/mage-data';
+import { createGroveLevel } from '../src/game/grove';
 import { LEGACY_HALO, sampleVisualTrack } from '../src/game/spell-visuals';
 import { SKILL_IDS, BASKETBALL, BASKETBALL_SKILL } from '../src/game/items';
 import {
@@ -41,6 +50,7 @@ import type { Ctx } from '../src/game/systems/context';
 
 function arena(): Ctx {
   const scene = buildScene();
+  scene.s.inventory.get(scene.player)!.slots[2] = { id: 'storm', count: 1 };
   scene.s.prop.forEach((id, p) => {
     const pos = scene.world.pos(id);
     if (p.blocks) scene.level.removeBlocker(pos.x, pos.y);
@@ -205,17 +215,17 @@ test('melee cannot hit across a wall, and hits after the same wall is removed', 
   const c = arena();
   c.world.setPos(c.player, { x: 622, y: 600 });
   const target = mob(c, 684, 600);
-  c.level.tiles[18 * 48 + 20] = Tile.WALL;
+  c.level.tiles[18 * c.level.w + 20] = Tile.WALL;
   meleeAttack(c, c.player, 0, Math.PI * 2, 62, 34);
   assert.equal(c.s.health.get(target)!.hp, 250);
-  c.level.tiles[18 * 48 + 20] = Tile.GRASS;
+  c.level.tiles[18 * c.level.w + 20] = Tile.GRASS;
   meleeAttack(c, c.player, 0, Math.PI * 2, 62, 34);
   assert.equal(c.s.health.get(target)!.hp, 216);
 });
 test('muzzle and swept projectile cannot spawn or tunnel through a nearby wall', () => {
   const c = arena();
   c.world.setPos(c.player, { x: 630, y: 600 });
-  c.level.tiles[18 * 48 + 20] = Tile.WALL;
+  c.level.tiles[18 * c.level.w + 20] = Tile.WALL;
   const id = spawnProjectile(c, c.player, 0, 'fireball', 30000, 30, true);
   assert.ok(c.world.pos(id).x < 640);
   const target = mob(c, 700, 600);
@@ -227,7 +237,7 @@ test('fire splash respects walls while damaging visible neighbours', () => {
   const c = arena();
   const visible = mob(c, 614, 620),
     hidden = mob(c, 678, 600);
-  c.level.tiles[18 * 48 + 20] = Tile.WALL;
+  c.level.tiles[18 * c.level.w + 20] = Tile.WALL;
   const id = spawnProjectile(c, c.player, 0, 'fireball', 500, 30, true);
   c.world.setPos(id, { x: 630, y: 600 });
   c.s.projectile.get(id)!.element = 'ember';
@@ -268,12 +278,12 @@ test('nova freezes, shield absorbs damage, per-staff cooldown prevents swap rese
 });
 test('blink stops before walls; storm field damages on ticks and expires through flush', () => {
   const c = arena();
-  c.level.tiles[18 * 48 + 20] = Tile.WALL;
+  c.level.tiles[18 * c.level.w + 20] = Tile.WALL;
   c.s.facing.get(c.player)!.angle = 0;
   select(c, 4);
   castSelected(c, true);
   assert.ok(c.world.pos(c.player).x <= 630 && c.world.pos(c.player).x > 600);
-  c.level.tiles[18 * 48 + 20] = Tile.GRASS;
+  c.level.tiles[18 * c.level.w + 20] = Tile.GRASS;
   select(c, 2);
   player(c).mana = 100;
   castSelected(c, true);
@@ -349,7 +359,7 @@ test('half joystick input produces half speed and stationary dodge uses facing',
 test('monster goal field routes around walls and cannot strike through them', () => {
   const c = arena();
   c.world.setPos(c.player, { x: 700, y: 600 });
-  for (let y = 16; y <= 19; y++) c.level.tiles[y * 48 + 20] = Tile.WALL;
+  for (let y = 16; y <= 19; y++) c.level.tiles[y * c.level.w + 20] = Tile.WALL;
   const id = mob(c, 580, 600);
   c.s.mob.get(id)!.speed = 130;
   for (let i = 0; i < 300 && c.world.pos(id).x <= 680; i++) {
@@ -560,4 +570,211 @@ test('summons reselect after a target disappears, serialize without browser stat
   assert.ok(c.s.summon.owners.every((id) => c.world.isPendingDeath(id)));
   c.world.flush();
   assert.equal(c.s.summon.length, 0);
+});
+
+test('grove extends east of the original town and keeps a clear altar route and real quest pickup', () => {
+  const level = createGroveLevel(20261109);
+  assert.equal(level.w, 72);
+  assert.equal(level.h, 48);
+  assert.ok(level.lineClear(level.spawn, GROVE.staff));
+  for (let y = 0; y < 48; y++) assert.equal(level.at(71, y), Tile.WALL);
+  const scene = buildScene();
+  assert.equal(
+    scene.s.inventory
+      .get(scene.player)!
+      .slots.some((item) => item?.id === 'storm'),
+    false,
+  );
+  assert.ok(
+    scene.s.prop.data.some(
+      (p) => p.sprite === 'propAncientTree' && p.w === 320,
+    ),
+  );
+  assert.ok(scene.s.prop.data.some((p) => p.sprite === 'propAltar'));
+  const pickup = scene.s.pickup.owners.find(
+    (id) => scene.s.pickup.get(id)?.kind === 'storm',
+  );
+  assert.ok(pickup);
+  assert.deepEqual(scene.world.pos(pickup!), GROVE.staff);
+});
+test('storm staff pickup unlocks and equips the profession; full bags never unlock it prematurely', () => {
+  const c = arena();
+  inv(c).slots[2] = null;
+  castMage(c, 'field');
+  assert.equal(c.s.mage.get(c.player)!.unlocked, false);
+  assert.equal(player(c).mana, 100);
+  const drop = spawnDrop(c, 600, 600, 'storm');
+  resetRules();
+  updateRules(c);
+  updateMage(c, 0);
+  assert.ok(c.world.isPendingDeath(drop));
+  assert.equal(c.s.mage.get(c.player)!.unlocked, true);
+  assert.equal(inv(c).selected, 2);
+  assert.equal(mageEquipped(c), true);
+  const d = arena();
+  inv(d).slots = Array.from({ length: 36 }, () => ({ id: 'stone', count: 64 }));
+  const retained = spawnDrop(d, 600, 600, 'storm');
+  updateRules(d);
+  updateMage(d, 0);
+  assert.equal(d.s.mage.get(d.player)!.unlocked, false);
+  assert.equal(d.world.isPendingDeath(retained), false);
+});
+test('unlocking a staff in storage does not select a different hotbar slot by modulo', () => {
+  const c = arena();
+  inv(c).slots[2] = { id: 'wood', count: 1 };
+  inv(c).slots[20] = { id: 'storm', count: 1 };
+  select(c, 5);
+  syncMageUnlock(c);
+  assert.equal(c.s.mage.get(c.player)!.unlocked, true);
+  assert.equal(inv(c).selected, 5);
+  assert.equal(mageEquipped(c), false);
+});
+test('profession cooldowns survive weapon swaps, reject insufficient mana, and remain independent', () => {
+  const c = arena();
+  select(c, 2);
+  castMage(c, 'field');
+  const mage = c.s.mage.get(c.player)!;
+  assert.equal(mage.cooldowns.field, MAGE_SKILLS.field.cooldown);
+  assert.equal(mage.cooldowns.wave, 0);
+  const before = player(c).mana;
+  castMage(c, 'field');
+  assert.equal(player(c).mana, before);
+  select(c, 8);
+  castMage(c, 'wave');
+  assert.equal(mage.cooldowns.wave, 0);
+  tickTimers(c, 1);
+  assert.equal(mage.cooldowns.field, 8);
+  select(c, 2);
+  player(c).mana = 0;
+  castMage(c, 'barrage');
+  assert.equal(mage.cooldowns.barrage, 0);
+  assert.equal(mage.barrageLeft, 0);
+  player(c).mana = 100;
+  castMage(c, 'wave');
+  assert.equal(mage.cooldowns.field, 8);
+  assert.equal(mage.cooldowns.wave, MAGE_SKILLS.wave.cooldown);
+});
+test('electric field follows the caster, has no orbs, and respects wall line of sight', () => {
+  const c = arena();
+  select(c, 2);
+  const first = mob(c, 680, 600, 500);
+  castMage(c, 'field');
+  updateMage(c, 1 / 60);
+  assert.equal(c.s.health.get(first)!.hp, 500 - MAGE.fieldDamage);
+  assert.equal(c.s.projectile.length, 0);
+  assert.equal(c.s.mage.get(c.player)!.barrageLeft, 0);
+  c.world.setPos(c.player, { x: 800, y: 600 });
+  const moved = mob(c, 860, 600, 500);
+  updateMage(c, 0.5);
+  assert.equal(c.s.health.get(first)!.hp, 500 - MAGE.fieldDamage);
+  assert.ok(c.s.health.get(moved)!.hp < 500);
+  const d = arena();
+  d.level.tiles[18 * d.level.w + 20] = Tile.WALL;
+  const hidden = mob(d, 660, 600, 500);
+  select(d, 2);
+  castMage(d, 'field');
+  updateMage(d, 0.1);
+  assert.equal(d.s.health.get(hidden)!.hp, 500);
+});
+test('thunder shockwave advances exactly five steps, hits each enemy once, and terminates at walls', () => {
+  const c = arena();
+  select(c, 2);
+  c.s.facing.get(c.player)!.angle = 0;
+  const enemy = mob(c, 700, 600, 500);
+  castMage(c, 'wave');
+  updateMage(c, 0.5);
+  const strikes = c.world
+    .drain()
+    .filter(
+      (e) => e.kind === 'mage' && e.ability === 'wave' && e.stage === 'impact',
+    );
+  assert.equal(strikes.length, 5);
+  assert.deepEqual(
+    strikes.map((e) => e.x),
+    [638, 680, 722, 764, 806],
+  );
+  assert.equal(c.s.health.get(enemy)!.hp, 500 - MAGE.waveDamage);
+  c.world.flush();
+  assert.equal(c.s.wave.length, 0);
+  const d = arena();
+  select(d, 2);
+  d.s.facing.get(d.player)!.angle = 0;
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 22] = Tile.WALL;
+  const behind = mob(d, 745, 600, 500);
+  castMage(d, 'wave');
+  updateMage(d, 0.5);
+  assert.equal(
+    d.world.drain().filter((e) => e.kind === 'mage' && e.stage === 'impact')
+      .length,
+    2,
+  );
+  assert.equal(d.s.health.get(behind)!.hp, 500);
+});
+test('ultimate repeatedly launches behind the caster while the separate orbit deals damage', () => {
+  const c = arena();
+  select(c, 2);
+  c.s.facing.get(c.player)!.angle = 0;
+  const close = mob(c, 650, 600, 500);
+  castMage(c, 'barrage');
+  updateMage(c, 1 / 60);
+  const first = c.s.projectile.owners[0];
+  assert.ok(c.world.pos(first).x < 600);
+  assert.equal(c.s.projectile.get(first)!.vx, MAGE.orbSpeed);
+  assert.equal(c.s.projectile.get(first)!.barrage, true);
+  assert.ok(c.s.health.get(close)!.hp < 500);
+  assert.ok(c.s.mage.get(c.player)!.orbitPhase > 0);
+  for (let i = 0; i < 300; i++) {
+    tickTimers(c, 1 / 60);
+    updateMage(c, 1 / 60);
+  }
+  assert.equal(c.s.mage.get(c.player)!.barragePhase, MAGE.barrageShots);
+  assert.equal(c.s.projectile.length, MAGE.barrageShots);
+  assert.equal(c.s.mage.get(c.player)!.barrageLeft, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.s.mage.data)), c.s.mage.data);
+});
+test('rear orb spawn never crosses a rear wall and orb explosions cannot damage across a front wall', () => {
+  const c = arena();
+  select(c, 2);
+  c.s.facing.get(c.player)!.angle = 0;
+  for (let y = 0; y < c.level.h; y++)
+    c.level.tiles[y * c.level.w + 17] = Tile.WALL;
+  castMage(c, 'barrage');
+  updateMage(c, 0.016);
+  assert.equal(c.world.pos(c.s.projectile.owners[0]).x, 600);
+  const d = arena();
+  select(d, 2);
+  d.s.facing.get(d.player)!.angle = 0;
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 20] = Tile.WALL;
+  const hidden = mob(d, 670, 600, 500);
+  castMage(d, 'barrage');
+  updateMage(d, 0.016);
+  updateProjectiles(d, 1);
+  assert.equal(d.s.health.get(hidden)!.hp, 500);
+  const events = d.world
+    .drain()
+    .filter((e) => e.kind === 'mage' && e.stage === 'impact');
+  assert.equal(events.length, 1);
+  assert.ok(events[0].x < 640);
+});
+
+test('a short touch skill tap still aims at the supplied target after its pointer has released', () => {
+  const c = arena();
+  select(c, 2);
+  c.s.facing.get(c.player)!.angle = Math.PI / 2;
+  applyInput(
+    c,
+    {
+      move: { x: 0, y: 0 },
+      pointer: c.camera.toScreen({ x: 820, y: 600 }),
+      down: 0,
+      pressed: BTN.CAST,
+      aimActive: false,
+    },
+    1 / 60,
+  );
+  assert.equal(c.s.facing.get(c.player)!.angle, 0);
+  assert.equal(c.s.wave.data[0].angle, 0);
+  assert.ok(c.s.mage.get(c.player)!.cooldowns.wave > 0);
 });

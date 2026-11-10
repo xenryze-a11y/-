@@ -19,3 +19,8 @@
 ## 篮球召唤素材
 
 `summon-dance.png` 来自用户本轮上传视频的一个完整循环，六帧透明切片；`kun-generated.png` 为本轮按用户要求新生成的像素“坤”字原稿。切帧时间、命令、来源哈希与游戏播放约定见 [docs/SUMMON.md](../../../docs/SUMMON.md)。两者用 `?inline` 内嵌并合入同一图集，不加载视频、不播放录屏音轨。
+
+
+## 古树和雷电职业图标
+
+`source/trees-generated.png`、`source/mage-icons-generated.png` 为本轮新生成的像素原稿，分别包含普通 / 巨大古树与电场 / 五段震荡 / 连射环绕大招三图标。没有使用游戏品牌 Logo 或下载现成技能图片。`grove-trees.png`、`mage-icons.png` 是供运行时内嵌的小图；生成原稿不进入运行包。规范化脚本为 `scripts/prepare-grove-art.cjs`，使用浏览器 Canvas 最近邻缩放、硬透明与限制色阶；默认构建不依赖该脚本。内容与切片约定见 [STORM_MAGE.md](../../../docs/STORM_MAGE.md)。

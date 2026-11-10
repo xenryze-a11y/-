@@ -261,12 +261,15 @@ export class WorldView {
       wall.sprite.alpha = wall.alpha;
     }
     for (const [id, v] of this.views)
-      if (v.look.staticSprite === 'propTree' && v.sprite) {
+      if (
+        ['propTree', 'propAncientTree'].includes(v.look.staticSprite || '') &&
+        v.sprite
+      ) {
         const p = world.pos(id),
           hides =
             player.y < p.y &&
-            player.y > p.y - 62 &&
-            Math.abs(player.x - p.x) < 27;
+            player.y > p.y - (s.prop.get(id)?.h || 128) + 15 &&
+            Math.abs(player.x - p.x) < (s.prop.get(id)?.w || 96) * 0.43;
         v.sprite.alpha +=
           ((hides ? 0.33 : 1) - v.sprite.alpha) * (1 - Math.exp(-10 * dt));
       }
@@ -299,7 +302,19 @@ export class WorldView {
     const view: EntityView = { root, look, pose: newLimbPose() };
     if (look.staticSprite) {
       const sprite = new Sprite(this.atlas.get(look.staticSprite));
-      sprite.anchor.set(0.5, look.family === 'prop' ? 0.88 : 0.5);
+      const tree = ['propTree', 'propAncientTree'].includes(
+        look.staticSprite || '',
+      );
+      sprite.anchor.set(
+        0.5,
+        tree
+          ? (sprite.texture.frame.height - 2) / sprite.texture.frame.height
+          : look.staticSprite === 'propAltar'
+            ? 94 / 96
+            : look.family === 'prop'
+              ? 0.88
+              : 0.5,
+      );
       sprite.zIndex = look.family === 'prop' ? LAYER.BODY : LAYER.FX;
       if (look.family === 'summon') {
         const shadow = new Sprite(this.atlas.get('partShadow'));
@@ -312,7 +327,14 @@ export class WorldView {
         const shadow = new Sprite(this.atlas.get('partPropShadow'));
         shadow.anchor.set(0.5);
         shadow.position.set(4, 4);
-        shadow.scale.set(look.staticSprite === 'propTree' ? 1 : 0.7, 0.65);
+        shadow.scale.set(
+          look.staticSprite === 'propAncientTree'
+            ? 3.6
+            : look.staticSprite === 'propTree'
+              ? 1.5
+              : 0.7,
+          look.staticSprite === 'propAncientTree' ? 1.4 : 0.65,
+        );
         root.addChild(shadow);
       }
       root.addChild(sprite);
@@ -574,17 +596,26 @@ export class WorldView {
     const pr = s.projectile.get(e);
     if (pr) {
       const anim = FX_ANIMS[pr.kind];
-      sprite.texture = pr.element
+      sprite.texture = pr.barrage
         ? this.atlas.get(
-            `missile_${pr.element}_${Math.floor(this.renderTime * PIXEL_FX.fps) % PIXEL_FX.projectileFrames}`,
+            'electricOrb_' + (Math.floor(this.renderTime * 15) % 8),
           )
-        : this.atlas.get(fxFrame(anim, this.renderTime, this.atlas));
+        : pr.element
+          ? this.atlas.get(
+              `missile_${pr.element}_${Math.floor(this.renderTime * PIXEL_FX.fps) % PIXEL_FX.projectileFrames}`,
+            )
+          : this.atlas.get(fxFrame(anim, this.renderTime, this.atlas));
       sprite.y = -12;
-      sprite.rotation = Math.atan2(pr.vy, pr.vx);
+      sprite.rotation = pr.barrage ? 0 : Math.atan2(pr.vy, pr.vx);
       sprite.scale.set(1);
       return;
     }
     const pk = s.pickup.get(e);
+    if (pk?.kind === 'storm') {
+      sprite.y = -24 - Math.sin(pk.bob) * 2;
+      sprite.scale.set(0.72);
+      return;
+    }
     if (pk) {
       sprite.y = -4 - Math.sin(pk.bob) * 2.5;
       sprite.scale.set(

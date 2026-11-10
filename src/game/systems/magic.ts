@@ -17,7 +17,7 @@ export function emitRing(
 ): void {
   ctx.world.emit({ kind: 'ring', x: pos.x, y: pos.y, amount: r, color, life });
 }
-function emitBolt(ctx: Ctx, a: Vec2, b: Vec2, color = '#d5c4ff'): void {
+function emitBolt(ctx: Ctx, a: Vec2, b: Vec2, color = ITEMS.storm.color): void {
   ctx.world.emit({
     kind: 'bolt',
     x: a.x,

@@ -3,6 +3,7 @@
  * ⚠️ 表现层的走路相位 / 混合 / 显示对象 **不放这里**，见 engine/renderer.ts 的 AvatarView。
  * 那条隔离保证「有没有渲染」不影响模拟结果，也是以后接服务端权威的前提。
  */
+import type { MageSkillId } from './mage-data';
 import type { Store, World } from '../engine/ecs';
 import type { InventoryState } from './inventory';
 import type { SkillId, ItemId, AbilityId } from './items';
@@ -33,6 +34,8 @@ export const C = {
   EQUIP: 'equip',
   INVENTORY: 'inventory',
   FIELD: 'field',
+  MAGE: 'mage',
+  WAVE: 'wave',
   SUMMON: 'summon',
 } as const;
 
@@ -103,6 +106,7 @@ export interface Projectile {
   element?: SkillId;
   pierce?: number;
   hit?: number[];
+  barrage?: boolean;
 }
 
 export interface Prop {
@@ -126,6 +130,26 @@ export interface Summon {
   life: number;
   age: number;
   angle: number;
+}
+
+export interface MageState {
+  unlocked: boolean;
+  cooldowns: Record<MageSkillId, number>;
+  fieldLeft: number;
+  fieldTick: number;
+  barrageLeft: number;
+  barrageTick: number;
+  barragePhase: number;
+  orbitTick: number;
+  orbitPhase: number;
+}
+export interface ThunderWave {
+  owner: number;
+  origin: Vec2;
+  angle: number;
+  next: number;
+  tick: number;
+  hit: number[];
 }
 
 export interface SpellField {
@@ -177,6 +201,8 @@ export interface Stores {
   equip: Store<Equip>;
   inventory: Store<InventoryState>;
   field: Store<SpellField>;
+  mage: Store<MageState>;
+  wave: Store<ThunderWave>;
   summon: Store<Summon>;
 }
 
@@ -195,6 +221,8 @@ export function createStores(w: World): Stores {
     equip: w.register<Equip>(C.EQUIP),
     inventory: w.register<InventoryState>(C.INVENTORY),
     field: w.register<SpellField>(C.FIELD),
+    mage: w.register<MageState>(C.MAGE),
+    wave: w.register<ThunderWave>(C.WAVE),
     summon: w.register<Summon>(C.SUMMON),
   };
 }

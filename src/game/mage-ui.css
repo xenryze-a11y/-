@@ -1,0 +1,515 @@
+/* 暗色金属底座、生命/法力宝珠、三枚职业技能与顺时针冷却环。 */
+#av-combat {
+  position: absolute;
+  bottom: 27px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 22px 13px;
+  border: 1px solid #716044;
+  background: linear-gradient(180deg, #1c2527f0, #101719f5);
+  box-shadow:
+    0 10px 32px #000a,
+    inset 0 1px #bda66b44;
+  pointer-events: auto;
+  border-radius: 44px 44px 17px 17px;
+  min-height: 116px;
+}
+#av-combat:before {
+  content: '';
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  top: 5px;
+  border-top: 1px solid #d2bc7a3d;
+  pointer-events: none;
+}
+.av-resource-orb {
+  position: relative;
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 4px solid #665a43;
+  box-shadow:
+    0 0 0 2px #1b2426,
+    inset 0 0 13px #000;
+  overflow: hidden;
+  background: #17191f;
+  flex-shrink: 0;
+}
+.av-resource-orb i {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--fill, 1) * 100%);
+  transition: height 0.12s;
+  background: radial-gradient(
+    ellipse at 36% 26%,
+    #e18978,
+    #9b2e37 55%,
+    #3c1521
+  );
+  box-shadow: inset 0 7px 12px #eead8d44;
+}
+.av-resource-orb.mana i {
+  background: radial-gradient(
+    ellipse at 36% 26%,
+    #9ddfcf,
+    #36829a 55%,
+    #173046
+  );
+  box-shadow: inset 0 7px 12px #a4ffed44;
+}
+.av-resource-orb:after {
+  content: '';
+  position: absolute;
+  inset: 4px;
+  border-radius: 50%;
+  box-shadow:
+    inset 3px 3px 6px #fff2,
+    inset -4px -4px 10px #000a;
+  pointer-events: none;
+}
+.av-resource-orb span {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  font-size: 12px;
+  color: #f4ecd3;
+  text-shadow: 0 1px 3px #000;
+  z-index: 1;
+}
+.av-resource-orb small {
+  display: block;
+  font-size: 9px;
+  color: #ddd1af;
+  margin-top: 2px;
+}
+.av-profession {
+  position: relative;
+  text-align: center;
+  min-width: 260px;
+}
+.av-class-caption {
+  font-family: Georgia, serif;
+  color: #bcad85;
+  letter-spacing: 0.22em;
+  font-size: 10px;
+  margin: 0 0 8px;
+}
+.av-class-caption b {
+  font-family: inherit;
+  color: #c5e6d6;
+  font-weight: 400;
+}
+#av-class-skills {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+#av-class-skills[hidden] {
+  display: none;
+}
+.av-mage-button {
+  position: relative;
+  width: 70px;
+  height: 70px;
+  border-radius: 50% !important;
+  border: 0 !important;
+  background: #182a2d !important;
+  padding: 7px;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  flex-shrink: 0;
+  box-shadow:
+    0 0 0 1px #9b8052,
+    inset 0 0 0 3px #3c3b31,
+    0 5px 14px #0008;
+  overflow: visible;
+}
+.av-mage-button img {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  image-rendering: pixelated;
+  pointer-events: none;
+  display: block;
+  transition: filter 0.1s;
+}
+.av-mage-button svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+  pointer-events: none;
+  overflow: visible;
+}
+.av-mage-button circle {
+  fill: none;
+  stroke-width: 2.3;
+}
+.av-ring-track {
+  stroke: #253e43;
+}
+.av-ring-progress {
+  stroke: #9af1d8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.09s linear;
+  filter: drop-shadow(0 0 2px #7fe6d666);
+}
+.av-mage-button.ultimate .av-ring-progress {
+  stroke: #e2c37e;
+}
+.av-mage-button.cooling img {
+  filter: brightness(0.35) saturate(0.65);
+}
+.av-mage-button.no-mana img {
+  filter: brightness(0.5) grayscale(0.6);
+}
+.av-mage-button:disabled {
+  cursor: default;
+}
+.av-mage-button:focus-visible {
+  outline: 2px solid #f5dda0;
+  outline-offset: 5px;
+}
+.av-mage-button.ready:hover {
+  box-shadow:
+    0 0 0 1px #d3c18b,
+    0 0 20px #88dcbd44;
+}
+.av-mage-key {
+  white-space: nowrap;
+  position: absolute;
+  bottom: -7px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: #ddcc9e;
+  background: #1a211e;
+  border: 1px solid #806d48;
+  border-radius: 3px;
+  min-width: 21px;
+  padding: 1px 4px;
+  line-height: 13px;
+  pointer-events: none;
+}
+.av-mage-count {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  font-size: 17px;
+  color: #f4ecd2;
+  text-shadow: 0 2px 3px #000;
+  font-weight: 600;
+  pointer-events: none;
+}
+.av-mage-count:empty {
+  display: none;
+}
+#av-class-hint {
+  max-width: 260px;
+  min-height: 58px;
+  letter-spacing: 0.08em;
+  line-height: 1.8;
+  background: #182321;
+  border: 1px solid #53685b;
+  color: #b9c4a8;
+  padding: 6px 14px;
+  font-size: 12px;
+  border-radius: 3px;
+  pointer-events: auto;
+}
+#av-class-hint[hidden] {
+  display: none;
+}
+#av-utilities {
+  display: grid;
+  grid-template-columns: repeat(2, 36px);
+  gap: 6px;
+  margin-left: 5px;
+  border-left: 1px solid #6b61463b;
+  padding-left: 13px;
+}
+#av-utilities button {
+  width: 36px;
+  height: 36px;
+  padding: 2px;
+  background: #273230d9;
+  border: 1px solid #77745b;
+  border-radius: 5px;
+  color: #dad0b0;
+  font-size: 10px;
+  pointer-events: auto;
+  touch-action: none;
+}
+#av-utilities button small {
+  display: block;
+  font-size: 8px;
+  color: #98aa9e;
+  margin-top: 2px;
+}
+#av-utilities button:active {
+  background: #536858;
+}
+#av-bottom {
+  bottom: 172px;
+  pointer-events: auto;
+}
+#av-hotbar {
+  --slot: 36px;
+  gap: 3px;
+  padding: 4px;
+  background: #111c1ae8;
+  border-color: #6c6349;
+}
+#av-hotbar .av-slot img {
+  width: 29px;
+  height: 29px;
+}
+#av-hotbar .av-key {
+  font-size: 8px;
+}
+#av-selected-name {
+  font-size: 11px;
+  min-height: 15px;
+  margin-bottom: 4px;
+}
+#av-controls {
+  font-size: 9px;
+  margin-top: 5px;
+  color: #9baba0;
+}
+#av-skill {
+  bottom: 234px;
+  font-size: 10px;
+  display: none;
+}
+#av-region-name {
+  letter-spacing: 0.05em;
+}
+#av-map {
+  width: 132px;
+  height: 88px;
+}
+.av-vitals {
+  width: 215px;
+  opacity: 0.9;
+}
+#av2.inventory-open #av-combat {
+  visibility: hidden;
+}
+#av2.touch-mode #av-controls {
+  display: none;
+}
+#av2.touch-mode #av-stick2 {
+  bottom: 108px;
+  width: 105px;
+  height: 105px;
+}
+#av2.touch-mode #av-mobile-buttons {
+  display: none;
+}
+@media (max-width: 650px) {
+  #av-combat {
+    left: auto;
+    right: 12px;
+    bottom: 76px;
+    transform: none;
+    gap: 0;
+    padding: 10px 9px 13px;
+    min-height: 0;
+    border-radius: 21px;
+    flex-wrap: wrap;
+    width: 212px;
+    justify-content: center;
+    box-shadow: 0 5px 18px #0007;
+  }
+  .av-profession {
+    min-width: 0;
+    width: 100%;
+  }
+  .av-class-caption {
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    margin-bottom: 6px;
+  }
+  #av-class-skills {
+    gap: 8px;
+  }
+  .av-mage-button {
+    width: 57px;
+    height: 57px;
+    padding: 6px;
+  }
+  .av-mage-button img {
+    width: 45px;
+    height: 45px;
+  }
+  .av-mage-key {
+    font-size: 8px;
+    line-height: 11px;
+    min-width: 18px;
+  }
+  .av-mage-count {
+    font-size: 14px;
+  }
+  .av-resource-orb {
+    display: none;
+  }
+  #av-utilities {
+    display: flex;
+    border-left: 0;
+    border-top: 1px solid #6b614644;
+    gap: 7px;
+    padding: 9px 0 0;
+    margin: 12px 0 0;
+  }
+  #av-utilities button {
+    width: 37px;
+    height: 34px;
+    font-size: 9px;
+  }
+  #av-utilities small {
+    display: none !important;
+  }
+  #av-bottom {
+    bottom: 13px;
+    width: calc(100% - 20px);
+  }
+  #av-hotbar {
+    --slot: calc((100vw - 54px) / 9);
+    gap: 3px;
+    width: max-content;
+    margin: auto;
+  }
+  #av-hotbar .av-slot img {
+    width: 27px;
+    height: 27px;
+  }
+  #av-selected-name {
+    position: absolute;
+    bottom: 49px;
+    left: 0;
+    font-size: 10px;
+    background: #15221bbf;
+    padding: 4px 7px;
+    border-radius: 2px;
+    max-width: 132px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  #av-controls {
+    display: none;
+  }
+  .av-vitals {
+    width: 171px;
+  }
+  .av-region {
+    gap: 5px;
+  }
+  #av-map {
+    width: 93px;
+    height: 62px;
+  }
+  #av-class-hint {
+    min-height: 54px;
+    font-size: 10px;
+    width: 100%;
+  }
+}
+@media (max-height: 480px) and (min-width: 651px) {
+  #av-combat {
+    left: auto;
+    right: 12px;
+    bottom: 64px;
+    transform: none;
+    min-height: 0;
+    padding: 8px 12px 11px;
+    border-radius: 22px;
+    gap: 8px;
+  }
+  .av-resource-orb {
+    display: none;
+  }
+  .av-profession {
+    min-width: 214px;
+  }
+  .av-mage-button {
+    width: 54px;
+    height: 54px;
+    padding: 6px;
+  }
+  .av-mage-button img {
+    width: 42px;
+    height: 42px;
+  }
+  #av-class-skills {
+    gap: 12px;
+  }
+  .av-class-caption {
+    font-size: 8px;
+    margin-bottom: 4px;
+  }
+  #av-utilities {
+    grid-template-columns: repeat(2, 30px);
+    padding-left: 8px;
+    gap: 4px;
+  }
+  #av-utilities button {
+    width: 30px;
+    height: 30px;
+    font-size: 8px;
+  }
+  #av-utilities small {
+    display: none;
+  }
+  #av-bottom {
+    bottom: 6px;
+    left: 50%;
+    width: auto;
+  }
+  #av-hotbar {
+    --slot: 32px;
+  }
+  #av-hotbar .av-slot img {
+    width: 25px;
+    height: 25px;
+  }
+  #av-selected-name {
+    display: none;
+  }
+  #av-controls {
+    display: none;
+  }
+  #av2.touch-mode #av-stick2 {
+    bottom: 70px;
+    width: 92px;
+    height: 92px;
+  }
+  .av-vitals {
+    width: 170px;
+  }
+  #av-map {
+    width: 108px;
+    height: 72px;
+  }
+}
+
+@media (max-width: 650px) {
+  #av-utilities.av-utils-weapon {
+    gap: 5px;
+  }
+  #av-utilities.av-utils-weapon button {
+    width: 31px;
+  }
+}

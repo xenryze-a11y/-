@@ -38,6 +38,7 @@ export function createInventory(): InventoryState {
   ids.forEach(
     (id, i) => (slots[i] = { id, count: i === 6 || i === 7 ? 5 : 1 }),
   );
+  slots[2] = null; // 雷电法杖在古树祭坛取得，首次获得时解锁职业。
   slots[9] = { id: 'herb', count: 8 };
   slots[10] = { id: 'crystal', count: 8 };
   slots[11] = { id: 'iron', count: 1 };
