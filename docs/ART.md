@@ -21,7 +21,7 @@ part<Name>                partFoot（兜底）/ partHand / partShadow
 | `View` | 只有 `Front` / `Back` / `Side` **三套**。朝左 = `Side` 贴图 + 水平镜像，没有第四套、更没有 8 方向帧 |
 | `Part` | `Body`（**只画躯干 + 裤腿**，不含手臂/鞋/手）/ `Head`（头 + 兜帽或头发）。兜帽/头发必须覆盖整个头顶和额头，见 D14。**斗篷部件当前不生成**（见 [DECISIONS.md](DECISIONS.md) D13） |
 | 尺寸 | 人形部件统一 **32×48**，锚点 `(0.5, 30/48)` = 腰带行；这是部件内部锚点；WorldView 统一上移 12 局部像素，使脚底 / 影子中心与实体世界坐标对齐（D16） |
-| 武器锚点 | 剑 `(0.5, 28/32)` 握把、法杖 `(0.5, 38/48)` 握把，旋转绕手 |
+| 武器锚点 | 剑 `(0.5, 28/32)` 握把、玩家法杖 `(0.5, 48/64)` 握把，NPC 旧法杖仍为 `(0.5, 38/48)`，旋转绕手 |
 | 瓦片 | 32×32，材质与通行性由同一个 `Tile` 枚举编码 |
 
 `get(name)` 查不到贴图会返回 `Texture.WHITE` 并打一条 warning，**不会崩**：换皮漏一两张时能一眼看出是哪块白了，而不是整局黑屏。
@@ -44,7 +44,7 @@ Go 版是 `sprShoe<Mat>[Side]`（bare / cloth / leather / iron），丧尸赤脚
 
 - **贴图**：`shoe<Mat>` / `shoe<Mat>Side`，材质见 `game/data.ts` 的 `SHOE_MATERIALS`（bare / cloth / leather / iron / zombieBare），5 材质 × 2 视角 = 10 张，由 `engine/art.ts` 的 `drawShoe` 自动生成。
 - **数据**：`Equip.shoes`（`game/components.ts`）。渲染层每帧用 `shoeSpriteName(equip.shoes, view === 'side')` 拼名字换 texture，**换装不改任何绘制代码**。
-- **交互**：玩家按 `B` 循环切 `PLAYER_SHOES`；亡者出生时随机分配 `zombieBare`（腐肉色赤脚）或 `cloth`。HUD 显示当前鞋。
+- **交互**：玩家在背包靴子位换装；亡者出生时随机分配 `zombieBare`（腐肉色赤脚）或 `cloth`。HUD 显示当前鞋。
 - **加新材质**：往 `SHOE_MATERIALS` 和 `SHOE_COLORS` 各加一项即可；想让玩家能换再加进 `PLAYER_SHOES` 和 `SHOE_LABEL`。
 - ⚠️ **侧视鞋是单独一张**，有朝右的鞋头和靴筒，不能拿正视图凑合——这正是 Go 版命名里 `Side` 后缀特殊的原因（鞋子的命名不带视角前缀，而是加 `Side`）。
 - `RIG.footScale` 控制鞋大小（当前 0.66）：太小会变成两个点，太大又会盖过裤腿。
@@ -149,7 +149,16 @@ interface Rig {
 
 - `tileWallRaised0..3`：32×64 立体墙；底部落在墙脚，顶部向北投影。
 - `item_<ItemId>`：40×40 背包 / 地面掉落共用图标；UI 从 CPU 图集截取 data URL，不新建 GPU 贴图。
-- `staff_<SkillId>` / `missile_<SkillId>_<0..3>`：五系独立杖头与投射物颜色，避免把橙色火球乘蓝 tint 得到灰褐色。
+- `staff_<SkillId>`：40×64，握把 Y=48；`missile_<SkillId>_<0..7>`：32×24，15 FPS。五系独立形状与调色板，避免用橙色火球乘蓝 tint。
 - `partPropShadow` / `partGlow`：共享阴影 / 火光帧；随物件视图销毁，不烘焙进地面留下残影。
 
 `fourDirection(angle,previous)` 只在视图里保留迟滞，不改连续 Facing.angle。手位仍是三档锚点，侧视仍是独立绘制 + 水平镜像，斗篷仍不生成。
+
+
+## 内嵌法杖与像素法术
+
+`assets/staves-generated.png` 是本次生成的五列透明原稿，顺序固定为 `SKILL_IDS`。启动时 `generated-staves.ts` 过滤透明噪点、按列裁切，以最近邻缩到 40×64，握柄对齐 Y=48；透明度二值化与 RGB 17 级距量化后，同一原稿生成 40×40 物品图标。全部切片成功才覆盖后备帧，解码失败整套保留程序化法杖。PNG 用 Vite `?inline` 内嵌，GPU 上传之前完成合成，仍只共享一个 TextureSource。更换原稿必须实际检查四方向握把和背包图标。
+
+`PixelSpellVfx` 只读 Scene 并消费标量 `spell / ring / bolt` 事件。地面法阵进 decalLayer，粒子、结晶和闪电进 fxLayer；所有笔触使用 2×2 世界像素方块，不用平滑描边、模糊滤镜。投射物拖尾按实际位移采样。上限为 480 粒子、48 个 burst、32 条 bolt，超限回收最旧项；重开清空特效及位置缓存，暂停不推进表现时钟。
+
+`spell-visuals.ts` 记录表现配色、容量、15 FPS 分段时钟和关键帧。`sampleVisualTrack` 区间采样与 `LEGACY_HALO` 的 26 帧光环时序迁自可确认的旧《圣剑联盟》源码，详见 [来源说明](../src/game/assets/README.md)。它们不参与伤害、冷却或模拟 RNG；不能在特效更新里扣血或写组件。外部图集必须同时匹配帧名与尺寸，旧 32×48 法杖图集不能套用新握把。

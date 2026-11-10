@@ -1,4 +1,6 @@
 import { test } from 'node:test';
+import { LEGACY_HALO, sampleVisualTrack } from '../src/game/spell-visuals';
+import { SKILL_IDS } from '../src/game/items';
 import assert from 'node:assert/strict';
 import { Camera } from '../src/engine/camera';
 import { Level, Tile } from '../src/engine/level';
@@ -343,4 +345,71 @@ test('monster goal field routes around walls and cannot strike through them', ()
     updateAI(c, 1 / 60);
   }
   assert.ok(c.world.pos(id).x > 680, JSON.stringify(c.world.pos(id)));
+});
+
+test('visual keyframes preserve legacy halo interpolation, bounds and stepped tracks', () => {
+  assert.deepEqual(sampleVisualTrack([], 1), { scale: 1, alpha: 0 });
+  assert.deepEqual(sampleVisualTrack(LEGACY_HALO, -10), {
+    scale: 0.8,
+    alpha: 1,
+  });
+  const middle = sampleVisualTrack(LEGACY_HALO, 12.5);
+  assert.ok(Math.abs(middle.scale - 0.95) < 1e-10);
+  assert.equal(middle.alpha, 0.5);
+  assert.deepEqual(sampleVisualTrack(LEGACY_HALO, 100), {
+    scale: 1.1,
+    alpha: 0,
+  });
+  const stepped = [
+    { frame: 0, scale: 1, alpha: 1, tween: false },
+    { frame: 5, scale: 2, alpha: 0 },
+  ];
+  assert.deepEqual(sampleVisualTrack(stepped, 4.99), { scale: 1, alpha: 1 });
+  assert.deepEqual(sampleVisualTrack(stepped, 5), { scale: 2, alpha: 0 });
+});
+test('every accepted spell emits serializable elemental stage metadata; rejected casts do not', () => {
+  for (let index = 0; index < SKILL_IDS.length; index++)
+    for (const special of [false, true]) {
+      const c = arena();
+      select(c, index);
+      c.world.drain();
+      castSelected(c, special);
+      const event = c.world.drain().find((e) => e.kind === 'spell');
+      assert.ok(event);
+      assert.equal(event.element, SKILL_IDS[index]);
+      assert.equal(event.stage, 'cast');
+      assert.equal(event.special, special);
+      assert.deepEqual(JSON.parse(JSON.stringify(event)), event);
+      castSelected(c, special);
+      assert.equal(c.world.drain().filter((e) => e.kind === 'spell').length, 0);
+    }
+  const c = arena();
+  player(c).mana = 0;
+  c.world.drain();
+  castSelected(c);
+  assert.equal(
+    c.world.drain().some((e) => e.kind === 'spell'),
+    false,
+  );
+});
+test('projectile impacts retain the caster element and finish through deferred destruction', () => {
+  for (const index of [0, 1, 3, 4]) {
+    const c = arena();
+    select(c, index);
+    castSelected(c);
+    c.world.drain();
+    const id = c.s.projectile.owners[0];
+    assert.ok(id);
+    c.s.projectile.get(id)!.life = 0;
+    updateProjectiles(c, 0);
+    const hits = c.world
+      .drain()
+      .filter((e) => e.kind === 'spell' && e.stage === 'impact');
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].element, SKILL_IDS[index]);
+    assert.equal(c.world.isPendingDeath(id), true);
+    assert.ok(c.s.projectile.get(id));
+    c.world.flush();
+    assert.equal(c.s.projectile.get(id), undefined);
+  }
 });

@@ -73,6 +73,12 @@ function impact(
         0.35,
       );
   } else if (target) applyDamage(ctx, target, p.dmg, p.owner);
-  ctx.world.emit({ kind: 'cast', x: pos.x, y: pos.y });
+  ctx.world.emit({
+    kind: 'spell',
+    element: p.element || (p.fromPlayer ? 'ember' : 'blink'),
+    stage: 'impact',
+    x: pos.x,
+    y: pos.y,
+  });
   ctx.world.destroy(id);
 }

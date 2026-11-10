@@ -11,6 +11,8 @@ import { Container, Sprite, Texture } from 'pixi.js';
 import type { TextureAtlas } from './atlas';
 import { ANCHOR_Y, shoeSpriteName } from './art';
 import { LAYER } from './layers';
+import { PIXEL_FX } from '../game/spell-visuals';
+import { STAFF_FRAME } from '../game/generated-staves';
 import { makeRng } from './math';
 import { spriteName, facingView, fourDirection } from './facing';
 import { TILE, TILE_SPRITE, Tile } from './level';
@@ -431,7 +433,10 @@ export class WorldView {
     parts.weapon.texture = this.atlas.get(weaponName);
     // 亡者手里是锈剑，和玩家那把亮剑一眼能分开。
     parts.weapon.tint = look.family === 'zombie' ? 0x8a8172 : 0xffffff;
-    parts.weapon.anchor.set(0.5, staff ? 38 / 48 : 28 / 32);
+    parts.weapon.anchor.set(
+      0.5,
+      staff ? (pl ? STAFF_FRAME.gripY / STAFF_FRAME.height : 38 / 48) : 28 / 32,
+    );
     // 武器跟着持械手（右手）走，静止位置同样取离散锚点。
     const restR = handRest(view, 1, flip);
     const hbR = handBob(v.pose, rig, 1);
@@ -532,7 +537,7 @@ export class WorldView {
       const anim = FX_ANIMS[pr.kind];
       sprite.texture = pr.element
         ? this.atlas.get(
-            `missile_${pr.element}_${Math.floor(this.renderTime * 14) % 4}`,
+            `missile_${pr.element}_${Math.floor(this.renderTime * PIXEL_FX.fps) % PIXEL_FX.projectileFrames}`,
           )
         : this.atlas.get(fxFrame(anim, this.renderTime, this.atlas));
       sprite.y = -12;

@@ -1,12 +1,13 @@
 /**
  * 图集加载与切帧。对应 goengine 的 backend/atlas.go + game/art/registry.go。
  *
- * 默认程序化生成；?externalAtlas 显式启用完整外部图集，缺帧整套回退。
+ * 默认合成程序化场景与内嵌法杖；?externalAtlas 显式启用完整外部图集，缺帧整套回退。
  * 所有部件共享一个 TextureSource（一张图集），Pixi 才能批处理；切出来的 Texture 只是 frame 不同。
  * get() 查不到名字返回白点而不是抛错 —— 换皮时漏一两张不该让整局崩掉。
  */
 import { Rectangle, Texture } from 'pixi.js';
 import { buildProceduralAtlas, type AtlasFrame, type BuiltAtlas } from './art';
+import { applyGeneratedStaves } from '../game/generated-staves';
 import { FX_ANIMS } from '../game/data';
 
 const BASE = import.meta.env.BASE_URL;
@@ -60,13 +61,19 @@ async function tryExternal(): Promise<BuiltAtlas | null> {
 export class TextureAtlas {
   readonly canvas: HTMLCanvasElement;
   readonly frames: Record<string, AtlasFrame>;
+  readonly generatedStaves: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
-  constructor(built: BuiltAtlas, sourceKind: 'procedural' | 'external') {
+  constructor(
+    built: BuiltAtlas,
+    sourceKind: 'procedural' | 'external',
+    generatedStaves = false,
+  ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
     this.sourceKind = sourceKind;
+    this.generatedStaves = generatedStaves;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
@@ -85,17 +92,24 @@ export class TextureAtlas {
   static async load(): Promise<TextureAtlas> {
     const external = await tryExternal();
     const built = buildProceduralAtlas();
+    const generated = await applyGeneratedStaves(built);
     if (
       external &&
-      Object.keys(built.frames).every((name) => name in external.frames)
+      Object.entries(built.frames).every(
+        ([name, frame]) =>
+          external.frames[name]?.w === frame.w &&
+          external.frames[name]?.h === frame.h,
+      )
     )
       return new TextureAtlas(external, 'external');
     if (external)
-      console.warn('[atlas] 外部图集缺少当前版本帧，回退到完整内置图集');
+      console.warn(
+        '[atlas] 外部图集帧清单或尺寸与当前版本不匹配，回退到完整内置图集',
+      );
     console.info(
-      '[atlas] 未发现外部美术，使用内置程序化图集（可用 __ASHEN__.dumpAtlas() 导出模板）',
+      '[atlas] 使用内置像素图集（程序化场景 + 内嵌法杖素材）（可用 __ASHEN__.dumpAtlas() 导出模板）',
     );
-    return new TextureAtlas(built, 'procedural');
+    return new TextureAtlas(built, 'procedural', generated);
   }
 
   has(name: string): boolean {

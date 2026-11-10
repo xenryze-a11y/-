@@ -10,7 +10,7 @@ npm run build
 npm run export:standalone
 ```
 
-类型检查、16 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
+类型检查、19 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
 
 ## 浏览器流程
 
@@ -28,4 +28,19 @@ npm run export:standalone
 
 `tests/simulation.test.ts`：堆栈守恒、满包与手持物品、合成扣料 / 满堆拒绝、装备减伤 / 无敌帧、药水与补给箱原子操作、supercover 视线、近战穿墙防护、发射点与高速扫掠、爆炸视线、连锁闪电、冻结 / 护盾 / 独立冷却、闪烁 / 雷暴生命周期、物件移除碰撞与掉落、满包后拾取、线性半推 / 静止翻滚 / 四方向迟滞、AI 绕墙。
 
-截图见 README 的 `docs/screenshot.png`。规则入口见 `items.ts`、`inventory.ts` 与 `systems/magic.ts`；架构取舍见 D15–D19。
+截图见 README 的 `docs/screenshot.png`。规则入口见 `items.ts`、`inventory.ts` 与 `systems/magic.ts`；架构取舍见 D15–D21。
+
+
+## 像素法杖 / 特效翻新复验
+
+在同一生产构建中完成以下验证（Chromium / Playwright）：
+
+- `atlas.generatedStaves === true`；全部帧共用同一 TextureSource，nearest 采样。五系持杖及物品图标的透明度只有 0 / 255；投射物五系 × 八帧 = 40 帧。
+- 五系普攻 / 特殊技十种组合逐一施放并截图，确认独立形状、调色板、符文、闪电、冰晶与护盾显示。四方向静止持杖旋转分别为 0.34 / 0.2 / -0.34 / -0.22，握把锚点统一 0.75。截图为受控实机画面，图集预览见 `staves.png`。
+- 对表现层 `consume / sync` 与 renderer.sync 前后组件、位置、alive、世界时间做 JSON 比较，完全一致。连续注入 500 组命中和闪电后，粒子 / burst / bolt 为上限 480 / 48 / 32；推进 3 秒后归零，clear 清空全部缓存。
+- 打开背包 0.95 秒，世界时间和特效数量不变；重开清空特效。390×844 触屏点选星辉杖、施放护盾、打开背包正常，无横向溢出。
+- 注入 Image.decode 失败，游戏仍能启动，`generatedStaves === false` 且后备法杖包含可见像素。
+- 生产预览未出现页面运行错误或失败 HTTP 响应；独立单文件在全新断网上下文启动，新法杖成功解码并打开背包，HTTP(S) 请求仍为 0。
+- 原有桌面 / 横竖屏背包、拆分、合成、铁靴换装、滚轮、翻滚、只读渲染与墙体深度流程再次通过，局部墙透明度约 0.22，恢复约 1.0。
+
+新增三个无浏览器测试覆盖旧关键帧的边界 / 插值 / 禁止补间、五系成功与拒绝施法的元素事件、命中元素与延迟删除。素材及迁移代码的固定来源见 `src/game/assets/README.md`；未确认的魔女 RPG 没有冒认或复制素材。

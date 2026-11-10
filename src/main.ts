@@ -194,6 +194,7 @@ async function boot(): Promise<void> {
     atlas,
     camera,
     renderer: view,
+    present,
     app,
     input,
     ui,

@@ -250,7 +250,10 @@ export function castSelected(ctx: Ctx, special = false): void {
     emitRing(ctx, end, 35, ITEMS[type].color, 0.4);
   }
   ctx.world.emit({
-    kind: 'cast',
+    kind: 'spell',
+    element: type,
+    stage: 'cast',
+    special,
     entity: ctx.player,
     x: pos.x,
     y: pos.y,

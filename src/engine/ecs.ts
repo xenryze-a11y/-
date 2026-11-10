@@ -69,6 +69,7 @@ export interface GameEvent {
   kind:
     | 'swing'
     | 'cast'
+    | 'spell'
     | 'impact'
     | 'hurt'
     | 'playerHurt'
@@ -80,6 +81,9 @@ export interface GameEvent {
     | 'notice'
     | 'ring'
     | 'bolt';
+  element?: string;
+  stage?: 'cast' | 'impact';
+  special?: boolean;
   entity?: Entity;
   x: number;
   y: number;

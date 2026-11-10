@@ -2,6 +2,8 @@
 import type { Painter, Spec, Skin } from '../engine/art';
 import type { View } from '../engine/facing';
 import { makeRng } from '../engine/math';
+import { drawSpellMissile } from './spell-art';
+import { PIXEL_FX } from './spell-visuals';
 import { ITEMS, SKILL_IDS, type ItemId } from './items';
 
 export function detailTile(p: Painter, type: string, seed: number): void {
@@ -212,9 +214,10 @@ export function upgradeSpecs(
   for (const element of SKILL_IDS) {
     specs.push({
       name: 'staff_' + element,
-      w: 32,
-      h: 48,
+      w: 40,
+      h: 64,
       draw: (p) => {
+        p.ctx.translate(4, 10);
         drawWeapon(p, 'staff');
         p.disc(16, 6, 5, '#27302a');
         p.disc(16, 6, 4, ITEMS[element].color);
@@ -223,43 +226,12 @@ export function upgradeSpecs(
         p.rect(15, 16, 1, 26, '#a38759');
       },
     });
-    for (let frame = 0; frame < 4; frame++)
+    for (let frame = 0; frame < PIXEL_FX.projectileFrames; frame++)
       specs.push({
         name: `missile_${element}_${frame}`,
-        w: 24,
-        h: 16,
-        draw: (p) => {
-          const color = ITEMS[element].color,
-            bright = frame % 2 ? '#f4f3d6' : '#e9f7f0';
-          if (element === 'frost') {
-            p.line(4, 8, 19, 8, '#325c70', 5);
-            p.line(7, 8, 21, 8, color, 3);
-            p.line(14, 5, 22, 8, '#c6f5fb', 2);
-            p.line(22, 8, 14, 11, '#91d7e6');
-            p.line(6, 4, 8, 11, '#8fcbd5');
-            p.rect(2, 7, 3, 1, '#a8dfea');
-          } else if (element === 'blink') {
-            p.line(2, 8, 13, 8, '#614d89', 3);
-            p.line(5, 8, 16, 8, color, 3);
-            p.disc(17, 8, 4, '#524170');
-            p.disc(17, 8, 3, color);
-            p.disc(18, 7, 1, bright);
-            p.rect(3, 4 + frame, 2, 1, color);
-          } else if (element === 'ward') {
-            p.disc(15, 8, 6, '#3b705d');
-            p.disc(15, 8, 4, color);
-            p.disc(16, 7, 2, bright);
-            p.rect(4, 7, 5, 2, '#81bca1');
-            p.rect(2, 8, 2, 1, '#b5d4a0');
-          } else {
-            p.line(2, 8, 12, 8, '#974f2e', 5);
-            p.disc(14, 8, 7, '#ad5938');
-            p.disc(15, 8, 5, '#e99854');
-            p.disc(16, 7, 3, '#f9d28a');
-            p.disc(17, 7, 1, bright);
-            p.rect(1, 5 + frame, 3, 2, '#c28145');
-          }
-        },
+        w: 32,
+        h: 24,
+        draw: (p) => drawSpellMissile(p, element, frame),
       });
   }
   for (const id of Object.keys(ITEMS) as ItemId[]) {
