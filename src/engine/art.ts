@@ -484,18 +484,40 @@ export function shoeSpriteName(mat: string, side: boolean): string {
 
 function drawShoe(p: Painter, mat: string, side: boolean): void {
   const c = SHOE_COLORS[mat] ?? SHOE_COLORS.cloth;
+  const bare = mat === 'bare' || mat === 'zombieBare';
   if (side) {
-    p.rect(1, 1, 6, 6, P.outline);
-    p.rect(2, 1, 3, 3, c.dark); // 靴筒
-    p.rect(2, 4, 5, 2, c.mid); // 鞋面
-    p.rect(6, 4, 2, 2, c.light); // 鞋头朝右
-    p.rect(1, 6, 7, 1, c.sole); // 鞋底
+    p.rect(1, bare ? 6 : 1, 7, bare ? 6 : 11, P.outline);
+    p.rect(2, bare ? 7 : 2, 5, bare ? 4 : 8, c.dark);
+    p.rect(3, 8, 8, 4, P.outline);
+    p.rect(3, 9, 7, 2, c.mid);
+    p.rect(8, 9, 2, 2, c.light);
+    p.rect(1, 11, 10, 2, c.sole);
+    if (!bare) {
+      p.rect(2, 2, 5, 2, c.light);
+      p.rect(3, 5, 4, 1, c.mid);
+    }
+    if (mat === 'iron') {
+      p.rect(3, 4, 3, 4, c.mid);
+      p.rect(3, 4, 1, 3, c.light);
+    }
   } else {
-    p.rect(1, 1, 6, 6, P.outline);
-    p.rect(2, 1, 4, 3, c.dark);
-    p.rect(2, 4, 4, 2, c.mid);
-    p.rect(2, 2, 4, 1, c.light);
-    p.rect(1, 6, 6, 1, c.sole);
+    p.rect(2, bare ? 6 : 1, 8, bare ? 7 : 12, P.outline);
+    p.rect(3, bare ? 7 : 2, 6, bare ? 4 : 9, c.dark);
+    p.rect(3, 8, 6, 3, c.mid);
+    p.rect(2, 11, 8, 2, c.sole);
+    if (!bare) {
+      p.rect(3, 2, 6, 2, c.light);
+      p.rect(4, 5, 4, 1, c.mid);
+    }
+    if (mat === 'iron') {
+      p.rect(4, 4, 4, 4, c.mid);
+      p.rect(4, 4, 1, 4, c.light);
+      p.rect(3, 9, 6, 1, c.light);
+    }
+    if (mat === 'leather') {
+      p.rect(6, 5, 2, 2, '#d3b66d');
+      p.rect(7, 6, 1, 1, c.dark);
+    }
   }
 }
 
@@ -504,11 +526,13 @@ function drawPart(p: Painter, kind: string): void {
     // 兜底贴图：正常路径走 shoe<Mat>[Side]，这张只在没拿到装备组件时用。
     drawShoe(p, 'cloth', false);
   } else if (kind === 'hand') {
-    // 方形像素手（不平滑）：回退到 Go D52 之前那种粗颗粒手，
-    // 不用 disc 圆 + 高光，避免放大后变成两朵圆花。
-    p.rect(1, 1, 6, 6, P.outline);
-    p.rect(2, 2, 4, 4, P.leatherDark);
-    p.rect(2, 2, 2, 2, '#9a7450');
+    // 6×7 手掌与袖口，原尺寸绘制，避免再缩到三个像素。
+    p.rect(1, 0, 6, 8, P.outline);
+    p.rect(1, 0, 6, 2, '#b6a57d');
+    p.rect(2, 2, 4, 5, P.leatherDark);
+    p.rect(2, 2, 3, 2, '#c09b70');
+    p.rect(2, 5, 4, 1, '#9a7450');
+    p.rect(5, 3, 2, 3, '#846443');
   } else if (kind === 'shadow') {
     p.disc(16, 8, 13, 'rgba(12,10,8,0.34)');
     p.disc(16, 8, 9, 'rgba(12,10,8,0.22)');
@@ -683,8 +707,8 @@ function buildSpecs(): Spec[] {
   for (const kind of ['foot', 'hand'])
     out.push({
       name: `part${kind[0].toUpperCase()}${kind.slice(1)}`,
-      w: 8,
-      h: 8,
+      w: kind === 'foot' ? 12 : 8,
+      h: kind === 'foot' ? 14 : 8,
       draw: (p) => drawPart(p, kind),
     });
   // 鞋：5 种材质 × 2 个视角。换装只改数据（Equip.shoes），不改绘制代码。
@@ -692,8 +716,8 @@ function buildSpecs(): Spec[] {
     for (const side of [false, true]) {
       out.push({
         name: shoeSpriteName(mat, side),
-        w: 8,
-        h: 8,
+        w: 12,
+        h: 14,
         draw: (q) => drawShoe(q, mat, side),
       });
     }

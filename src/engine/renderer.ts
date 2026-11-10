@@ -12,6 +12,7 @@ import type { TextureAtlas } from './atlas';
 import { ANCHOR_Y, shoeSpriteName } from './art';
 import { LAYER } from './layers';
 import { PIXEL_FX } from '../game/spell-visuals';
+import { BASKETBALL_VISUAL, summonFrameAt } from '../game/basketball-content';
 import { STAFF_FRAME } from '../game/generated-staves';
 import { makeRng } from './math';
 import { spriteName, facingView, fourDirection } from './facing';
@@ -300,6 +301,13 @@ export class WorldView {
       const sprite = new Sprite(this.atlas.get(look.staticSprite));
       sprite.anchor.set(0.5, look.family === 'prop' ? 0.88 : 0.5);
       sprite.zIndex = look.family === 'prop' ? LAYER.BODY : LAYER.FX;
+      if (look.family === 'summon') {
+        const shadow = new Sprite(this.atlas.get('partShadow'));
+        shadow.anchor.set(0.5);
+        shadow.scale.set(0.5, 0.32);
+        shadow.alpha = 0.6;
+        root.addChild(shadow);
+      }
       if (look.family === 'prop') {
         const shadow = new Sprite(this.atlas.get('partPropShadow'));
         shadow.anchor.set(0.5);
@@ -401,10 +409,12 @@ export class WorldView {
       shoeSpriteName(s.equip.get(e)?.shoes ?? 'cloth', view === 'side'),
     );
     for (let i = 0; i < 2; i++) {
-      const fp = footPos(v.pose, rig, i);
+      const fp = footPos(v.pose, rig, i, view, flip);
       parts.feet[i].x = fp.x;
       parts.feet[i].y = rig.soleY + fp.y - 12;
       parts.feet[i].texture = shoeTex;
+      parts.feet[i].anchor.set(view === 'side' ? 4.5 / 12 : 0.5, 13 / 14);
+      parts.feet[i].zIndex = view === 'side' && i === 0 ? 9 : 11;
       parts.feet[i].scale.set(rig.footScale * flipX, rig.footScale);
     }
     // 手位：三档视角锚点（Go D52 之前的「不平滑」版）+ 走路摆动，
@@ -414,8 +424,8 @@ export class WorldView {
       const hb = handBob(v.pose, rig, i);
       parts.hands[i].x = rest.x + hb.x;
       parts.hands[i].y = rest.y + hb.y - bob - 12;
-      // 悬浮手比躯干小得多，放大后会像两块装甲板。
-      parts.hands[i].scale.set(0.65);
+      // 手掌内侧与衣袖接近，仍保持独立像素部件。
+      parts.hands[i].scale.set(1);
     }
 
     // 武器：平时随朝向，出手时用 ease-out 扫过一段弧（对应 Go 的 AttackAnim 0.22s）。
@@ -425,17 +435,26 @@ export class WorldView {
     const aim = f?.angle ?? 0;
     const staff =
       (isPlayer && pl?.weapon === 'staff') || look.family === 'caster';
-    const weaponName = staff
-      ? pl
-        ? 'staff_' + pl.skill
-        : 'weaponStaff'
-      : 'weaponSword';
+    const basketball = pl?.weapon === 'basketball';
+    const weaponName = basketball
+      ? 'weaponBasketball'
+      : staff
+        ? pl
+          ? 'staff_' + pl.skill
+          : 'weaponStaff'
+        : 'weaponSword';
     parts.weapon.texture = this.atlas.get(weaponName);
     // 亡者手里是锈剑，和玩家那把亮剑一眼能分开。
     parts.weapon.tint = look.family === 'zombie' ? 0x8a8172 : 0xffffff;
     parts.weapon.anchor.set(
       0.5,
-      staff ? (pl ? STAFF_FRAME.gripY / STAFF_FRAME.height : 38 / 48) : 28 / 32,
+      basketball
+        ? 0.5
+        : staff
+          ? pl
+            ? STAFF_FRAME.gripY / STAFF_FRAME.height
+            : 38 / 48
+          : 28 / 32,
     );
     // 武器跟着持械手（右手）走，静止位置同样取离散锚点。
     const restR = handRest(view, 1, flip);
@@ -490,7 +509,7 @@ export class WorldView {
     parts.hands[0].zIndex = view === 'back' ? 8 : 16;
     parts.hands[1].zIndex = view === 'back' ? 9 : 17;
     parts.weapon.zIndex =
-      view === 'back' ? 9 : view === 'side' && flip ? 11 : 18;
+      view === 'back' ? 9 : view === 'side' && flip ? 11 : 16;
     if (staff) {
       parts.weapon.rotation =
         view === 'back' ? -0.22 : view === 'front' ? 0.2 : flip ? -0.34 : 0.34;
@@ -515,6 +534,12 @@ export class WorldView {
       parts.weapon.visible = false;
       parts.hands.forEach((hand) => (hand.tint = 0xa3b58c));
     }
+    if (basketball) {
+      parts.weapon.rotation = 0;
+      parts.weapon.scale.set(0.8);
+      parts.weapon.x += flip ? -3 : 3;
+      parts.weapon.y -= 3;
+    }
     // 翻滚无敌帧：脚下亮环用影子放大 + 变亮代替。
     const dodge = s.dodge.get(e);
     parts.shadow.tint = dodge && dodge.invuln > 0 ? 0x9ad8ff : 0xffffff;
@@ -532,6 +557,20 @@ export class WorldView {
     scene: Scene,
   ): void {
     const { s } = scene;
+    const summon = s.summon.get(e);
+    if (summon) {
+      sprite.texture = this.atlas.get(
+        'summon_' + summonFrameAt(this.renderTime + e * 0.037),
+      );
+      sprite.anchor.set(0.5, 1);
+      sprite.rotation = 0;
+      sprite.y = -1;
+      sprite.scale.set(
+        (Math.cos(summon.angle) < 0 ? -1 : 1) * BASKETBALL_VISUAL.scale,
+        BASKETBALL_VISUAL.scale,
+      );
+      return;
+    }
     const pr = s.projectile.get(e);
     if (pr) {
       const anim = FX_ANIMS[pr.kind];

@@ -20,6 +20,7 @@ import { tickTimers } from './game/systems/timers';
 import { updateAI } from './game/systems/ai';
 import { updateProjectiles } from './game/systems/projectile';
 import { updateFields, castSelected } from './game/systems/magic';
+import { updateSummons } from './game/systems/basketball';
 import { resetRules, updateRules } from './game/systems/rules';
 import type { Ctx } from './game/systems/context';
 
@@ -151,6 +152,7 @@ async function boot(): Promise<void> {
         updateAI(ctx, _fixed);
         updateProjectiles(ctx, _fixed);
         updateFields(ctx, _fixed);
+        updateSummons(ctx, _fixed);
         updateRules(ctx);
         ctx.world.flush();
       });

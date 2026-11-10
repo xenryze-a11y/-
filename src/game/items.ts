@@ -1,7 +1,9 @@
 /** 内容表：道具与技能数值统一在这里，系统不认识 DOM / Pixi。 */
 export type SkillId = 'ember' | 'frost' | 'storm' | 'ward' | 'blink';
+export type AbilityId = SkillId | 'basketball';
 export type ItemId =
   | SkillId
+  | 'basketball'
   | 'sword'
   | 'health'
   | 'mana'
@@ -15,7 +17,14 @@ export type ItemId =
   | 'iron';
 export interface ItemDefinition {
   name: string;
-  kind: 'staff' | 'sword' | 'potion' | 'material' | 'supply' | 'boots';
+  kind:
+    | 'staff'
+    | 'basketball'
+    | 'sword'
+    | 'potion'
+    | 'material'
+    | 'supply'
+    | 'boots';
   stack: number;
   color: string;
   desc: string;
@@ -37,6 +46,27 @@ export const SKILL_IDS: SkillId[] = [
 export function isSkill(id: ItemId): id is SkillId {
   return SKILL_IDS.includes(id as SkillId);
 }
+export function isAbility(id: ItemId): id is AbilityId {
+  return id === 'basketball' || isSkill(id);
+}
+export const BASKETBALL = {
+  count: 5,
+  maxActive: 15,
+  seekRange: 430,
+  radius: 6,
+  life: 2.8,
+  windup: 0.18,
+  speed: 235,
+  splashRadius: 45,
+  damage: 22,
+};
+export const BASKETBALL_SKILL: SkillDefinition = {
+  name: '坤影突袭',
+  cost: 18,
+  cd: 2.4,
+  baseCost: 18,
+  baseCd: 2.4,
+};
 export const INVENTORY = {
   slots: 36,
   hotbar: 9,
@@ -116,6 +146,13 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     stack: 1,
     color: '#baa5f2',
     desc: '普攻：穿刺秘矢 · 特殊技：相位闪烁\n沿瞄准方向短距闪烁，遇墙停下。',
+  },
+  basketball: {
+    name: '坤影篮球',
+    kind: 'basketball',
+    stack: 1,
+    color: '#ffb063',
+    desc: '左键 / 右键：召唤 5 个小坤影\n短暂起舞后追击敌人，命中爆出坤字。',
   },
   sword: {
     name: '守望者长剑',
@@ -201,4 +238,9 @@ export const SKILLS: Record<SkillId, SkillDefinition> = {
   storm: { name: '雷暴领域', cost: 32, cd: 5.5, baseCost: 12, baseCd: 0.65 },
   ward: { name: '星辉护盾', cost: 25, cd: 7, baseCost: 7, baseCd: 0.36 },
   blink: { name: '相位闪烁', cost: 18, cd: 2.8, baseCost: 10, baseCd: 0.4 },
+};
+
+export const ABILITIES: Record<AbilityId, SkillDefinition> = {
+  ...SKILLS,
+  basketball: BASKETBALL_SKILL,
 };

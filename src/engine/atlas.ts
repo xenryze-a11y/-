@@ -7,6 +7,7 @@
  */
 import { Rectangle, Texture } from 'pixi.js';
 import { buildProceduralAtlas, type AtlasFrame, type BuiltAtlas } from './art';
+import { applyBasketballAssets } from '../game/basketball-assets';
 import { applyGeneratedStaves } from '../game/generated-staves';
 import { FX_ANIMS } from '../game/data';
 
@@ -62,6 +63,7 @@ export class TextureAtlas {
   readonly canvas: HTMLCanvasElement;
   readonly frames: Record<string, AtlasFrame>;
   readonly generatedStaves: boolean;
+  readonly basketballAssetsReady: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
@@ -69,11 +71,13 @@ export class TextureAtlas {
     built: BuiltAtlas,
     sourceKind: 'procedural' | 'external',
     generatedStaves = false,
+    basketballAssetsReady = false,
   ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
     this.sourceKind = sourceKind;
     this.generatedStaves = generatedStaves;
+    this.basketballAssetsReady = basketballAssetsReady;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
@@ -93,6 +97,7 @@ export class TextureAtlas {
     const external = await tryExternal();
     const built = buildProceduralAtlas();
     const generated = await applyGeneratedStaves(built);
+    const basketballReady = await applyBasketballAssets(built);
     if (
       external &&
       Object.entries(built.frames).every(
@@ -109,7 +114,7 @@ export class TextureAtlas {
     console.info(
       '[atlas] 使用内置像素图集（程序化场景 + 内嵌法杖素材）（可用 __ASHEN__.dumpAtlas() 导出模板）',
     );
-    return new TextureAtlas(built, 'procedural', generated);
+    return new TextureAtlas(built, 'procedural', generated, basketballReady);
   }
 
   has(name: string): boolean {

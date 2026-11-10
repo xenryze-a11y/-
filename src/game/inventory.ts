@@ -33,16 +33,16 @@ export function createInventory(): InventoryState {
     'sword',
     'health',
     'mana',
-    'wood',
+    'basketball',
   ];
   ids.forEach(
-    (id, i) =>
-      (slots[i] = { id, count: i === 6 || i === 7 ? 5 : i === 8 ? 8 : 1 }),
+    (id, i) => (slots[i] = { id, count: i === 6 || i === 7 ? 5 : 1 }),
   );
   slots[9] = { id: 'herb', count: 8 };
   slots[10] = { id: 'crystal', count: 8 };
   slots[11] = { id: 'iron', count: 1 };
   slots[12] = { id: 'stone', count: 12 };
+  slots[14] = { id: 'wood', count: 8 };
   return {
     slots,
     craft: [null, null, null, null],
@@ -122,6 +122,7 @@ export function syncEquipment(ctx: Ctx): void {
     p.weapon = 'staff';
     p.skill = selected.id;
   } else if (selected?.id === 'sword') p.weapon = 'sword';
+  else if (selected?.id === 'basketball') p.weapon = 'basketball';
   eq.shoes =
     inv.boots?.id === 'iron'
       ? 'iron'

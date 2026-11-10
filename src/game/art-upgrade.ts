@@ -2,6 +2,7 @@
 import type { Painter, Spec, Skin } from '../engine/art';
 import type { View } from '../engine/facing';
 import { makeRng } from '../engine/math';
+import { basketballSpecs, drawBasketball } from './basketball-art';
 import { drawSpellMissile } from './spell-art';
 import { PIXEL_FX } from './spell-visuals';
 import { ITEMS, SKILL_IDS, type ItemId } from './items';
@@ -210,7 +211,7 @@ export function upgradeSpecs(
   drawProp: (p: Painter, kind: string, seed: number) => void,
   drawWeapon: (p: Painter, kind: string) => void,
 ): Spec[] {
-  const specs: Spec[] = [];
+  const specs: Spec[] = basketballSpecs();
   for (const element of SKILL_IDS) {
     specs.push({
       name: 'staff_' + element,
@@ -261,6 +262,8 @@ export function upgradeSpecs(
           }
           if (id === 'ward') p.ring(26, 9, 7, 1, '#d8efbb');
           if (id === 'blink') p.disc(26, 9, 2, '#534579');
+        } else if (id === 'basketball') {
+          drawBasketball(p, 20, 20, 16);
         } else if (id === 'sword') {
           p.line(11, 33, 30, 5, '#1c2d27', 6);
           p.line(13, 30, 30, 6, '#9aadaa', 4);

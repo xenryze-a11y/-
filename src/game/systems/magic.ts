@@ -1,4 +1,5 @@
 /** 技能只改模拟与发事件；环形粒子、闪电折线与震屏由 present.ts 消费。 */
+import { summonBasketballs } from './basketball';
 import { angleDiff, dist, norm, type Vec2 } from '../../engine/math';
 import { TAG } from '../components';
 import { CFG } from '../data';
@@ -158,6 +159,10 @@ export function castSelected(ctx: Ctx, special = false): void {
   }
   const angle = ctx.s.facing.get(ctx.player)!.angle,
     pos = { ...ctx.world.pos(ctx.player) };
+  if (kind === 'basketball') {
+    summonBasketballs(ctx);
+    return;
+  }
   if (kind === 'sword') {
     if ((special ? p.castCd : p.atkCd) > 0) return;
     meleeAttack(

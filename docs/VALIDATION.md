@@ -10,7 +10,7 @@ npm run build
 npm run export:standalone
 ```
 
-类型检查、19 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
+类型检查、25 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
 
 ## 浏览器流程
 
@@ -44,3 +44,19 @@ npm run export:standalone
 - 原有桌面 / 横竖屏背包、拆分、合成、铁靴换装、滚轮、翻滚、只读渲染与墙体深度流程再次通过，局部墙透明度约 0.22，恢复约 1.0。
 
 新增三个无浏览器测试覆盖旧关键帧的边界 / 插值 / 禁止补间、五系成功与拒绝施法的元素事件、命中元素与延迟删除。素材及迁移代码的固定来源见 `src/game/assets/README.md`；未确认的魔女 RPG 没有冒认或复制素材。
+
+
+## 穿戴对位与篮球召唤复验
+
+类型检查、25 项回归、常规构建、单文件导出通过；新增六项覆盖视角脚位 / 原地转身、视频非等间隔六帧循环边界、五个召唤物 / 左右键共享冷却 / 无蓝与满额拒绝、追击真实伤害 / 一次引爆、扫掠撞墙 / 爆炸视线、换目标 / 序列化 / 到期清理。
+
+生产预览 Chromium / Playwright 检查通过：
+
+- 前 / 后 / 左 / 右四方向鞋帧为 12×14、原尺寸、鞋底锚点 13/14，静止鞋底 Y=0；手掌缩放为 1，三档手位仍保留。所有帧（含视频帧和生成字粒子）共用一个 TextureSource。
+- 背包穿上铁靴后，真实 Equip、装备格、预览画布同步更新，预览 data URL 与穿戴前不同；实际确认铁靴和皮靴材质差异。
+- 选择第 9 格按 F 产生 5 个视频召唤物；打开背包后世界时间、组件内容与显示视频帧均冻结；继续后追击并出现生成字粒子。
+- 连续注入 100 次爆炸后，字粒子和分配 Sprite 均封顶 160；推进 2 秒后活跃数为 0。表现 consume / update / sync 与 renderer.sync 前后 ECS / 位置 / alive / 世界时间 JSON 完全一致。重开召唤组件与粒子清零。
+- 手机 390×844 点选篮球、释放召唤、打开背包通过；844×390 背包窗口 x=72、right=772、bottom≈380.55，无横向溢出。
+- 全新隔离断网文档成功解码视频切帧和生成“坤”字，并产生 5 个召唤物，HTTP(S) 请求为 0。无页面运行错误。
+
+新增截图：`basketball-summon.png`、`basketball-impact.png`、`gear-preview.png`。视频循环与素材生成来源详见 `SUMMON.md`，原始录屏未打包进游戏。
