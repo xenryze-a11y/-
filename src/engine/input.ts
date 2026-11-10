@@ -16,6 +16,8 @@ export const BTN = {
   SHOES: 1 << 7,
   USE: 1 << 8,
   DROP: 1 << 9,
+  FIELD: 1 << 10,
+  ULTIMATE: 1 << 11,
 } as const;
 
 export interface InputState {
@@ -129,10 +131,14 @@ export class Input {
         : k === 'x'
           ? BTN.USE
           : k === 'q'
-            ? BTN.DROP
-            : k === 'f3'
-              ? BTN.DEBUG
-              : 0;
+            ? BTN.FIELD
+            : k === 'r'
+              ? BTN.ULTIMATE
+              : k === 'g'
+                ? BTN.DROP
+                : k === 'f3'
+                  ? BTN.DEBUG
+                  : 0;
   }
   private press(k: string): void {
     const bit = this.keyBit(k);

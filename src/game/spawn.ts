@@ -4,6 +4,9 @@ import { Level, TILE, Tile } from '../engine/level';
 import { makeRng, type Vec2 } from '../engine/math';
 import { createStores, TAG, type MobKind, type Stores } from './components';
 import { createInventory } from './inventory';
+import { createGroveLevel, groveClearance } from './grove';
+import { GROVE } from './mage-data';
+import { spawnDrop } from './systems/loot';
 import { CFG } from './data';
 
 export interface Scene {
@@ -23,7 +26,7 @@ function findSpot(level: Level, rng: () => number, minFromSpawn = 0): Vec2 {
   for (let i = 0; i < 400; i++) {
     const x = (2 + rng() * (level.w - 4)) * TILE;
     const y = (2 + rng() * (level.h - 4)) * TILE;
-    if (level.blocked(x, y, 12)) continue;
+    if (level.blocked(x, y, 12) || groveClearance(x, y)) continue;
     if (
       minFromSpawn > 0 &&
       Math.hypot(x - level.spawn.x, y - level.spawn.y) < minFromSpawn
@@ -37,7 +40,7 @@ function findSpot(level: Level, rng: () => number, minFromSpawn = 0): Vec2 {
 export function buildScene(seed = CFG.seed): Scene {
   const world = new World((seed ^ 0x5bf03635) >>> 0);
   const s = createStores(world);
-  const level = new Level(CFG.map.w, CFG.map.h, seed);
+  const level = createGroveLevel(seed);
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
 
   const player = world.createAt(
@@ -79,6 +82,17 @@ export function buildScene(seed = CFG.seed): Scene {
   });
   s.equip.set(player, { shoes: 'leather' });
   s.inventory.set(player, createInventory());
+  s.mage.set(player, {
+    unlocked: false,
+    cooldowns: { field: 0, wave: 0, barrage: 0 },
+    fieldLeft: 0,
+    fieldTick: 0,
+    barrageLeft: 0,
+    barrageTick: 0,
+    barragePhase: 0,
+    orbitTick: 0,
+    orbitPhase: 0,
+  });
 
   // 场景物件：静态贴图 + 圆形碰撞，注册进 Level 的 blockers。
   const props: {
@@ -91,9 +105,9 @@ export function buildScene(seed = CFG.seed): Scene {
   }[] = [
     {
       sprite: 'propTree',
-      w: 48,
-      h: 64,
-      r: 9,
+      w: 96,
+      h: 128,
+      r: 14,
       blocks: true,
       count: CFG.spawn.trees,
     },
@@ -149,6 +163,32 @@ export function buildScene(seed = CFG.seed): Scene {
       if (def.blocks) s.health.set(e, { hp: 28, max: 28, armor: 0 });
     }
   }
+
+  // 固定地标不参与破坏，树根碰撞只占实体底部。
+  for (const def of [
+    { sprite: 'propAncientTree', pos: GROVE.tree, w: 320, h: 352, r: 30 },
+    { sprite: 'propAltar', pos: GROVE.altar, w: 128, h: 96, r: 18 },
+  ]) {
+    const id = world.createAt([TAG.PROP], def.pos.x, def.pos.y);
+    s.prop.set(id, { sprite: def.sprite, w: def.w, h: def.h, blocks: true });
+    s.radius.set(id, { r: def.r });
+    level.addBlocker(def.pos.x, def.pos.y, def.r);
+    s.look.set(id, {
+      family: 'prop',
+      scale: 1,
+      showHealth: false,
+      animated: false,
+      staticSprite: def.sprite,
+    });
+  }
+  const staff = spawnDrop(
+    { world, s },
+    GROVE.staff.x,
+    GROVE.staff.y,
+    'storm',
+    1,
+  );
+  s.pickup.get(staff)!.ignoreUntil = 0;
 
   // 药剂：靠近自动拾取，演示「标签 + 事件」怎么扩玩法。
   for (let i = 0; i < CFG.spawn.pickups; i++) {
@@ -212,5 +252,14 @@ export function buildScene(seed = CFG.seed): Scene {
     addMob(kinds[Math.floor(rng() * kinds.length)], p.x, p.y);
   }
 
+  for (const [dx, dy] of [
+    [-160, 200],
+    [150, 180],
+    [220, 40],
+  ]) {
+    const x = GROVE.altar.x + dx,
+      y = GROVE.altar.y + dy;
+    if (!level.blocked(x, y, 12)) addMob('shamble', x, y);
+  }
   return { world, s, level, player };
 }

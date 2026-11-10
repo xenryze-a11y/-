@@ -7,6 +7,7 @@
  */
 import { Rectangle, Texture } from 'pixi.js';
 import { buildProceduralAtlas, type AtlasFrame, type BuiltAtlas } from './art';
+import { applyGroveArt } from '../game/grove-art';
 import { applyBasketballAssets } from '../game/basketball-assets';
 import { applyGeneratedStaves } from '../game/generated-staves';
 import { FX_ANIMS } from '../game/data';
@@ -64,6 +65,7 @@ export class TextureAtlas {
   readonly frames: Record<string, AtlasFrame>;
   readonly generatedStaves: boolean;
   readonly basketballAssetsReady: boolean;
+  readonly groveArtReady: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
@@ -72,12 +74,14 @@ export class TextureAtlas {
     sourceKind: 'procedural' | 'external',
     generatedStaves = false,
     basketballAssetsReady = false,
+    groveArtReady = false,
   ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
     this.sourceKind = sourceKind;
     this.generatedStaves = generatedStaves;
     this.basketballAssetsReady = basketballAssetsReady;
+    this.groveArtReady = groveArtReady;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
@@ -98,6 +102,7 @@ export class TextureAtlas {
     const built = buildProceduralAtlas();
     const generated = await applyGeneratedStaves(built);
     const basketballReady = await applyBasketballAssets(built);
+    const groveReady = await applyGroveArt(built);
     if (
       external &&
       Object.entries(built.frames).every(
@@ -114,7 +119,13 @@ export class TextureAtlas {
     console.info(
       '[atlas] 使用内置像素图集（程序化场景 + 内嵌法杖素材）（可用 __ASHEN__.dumpAtlas() 导出模板）',
     );
-    return new TextureAtlas(built, 'procedural', generated, basketballReady);
+    return new TextureAtlas(
+      built,
+      'procedural',
+      generated,
+      basketballReady,
+      groveReady,
+    );
   }
 
   has(name: string): boolean {

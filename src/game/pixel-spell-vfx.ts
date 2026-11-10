@@ -415,7 +415,7 @@ export class PixelSpellVfx {
   private trails(scene: Scene, dt: number): void {
     const seen = new Set<number>();
     scene.s.projectile.forEach((id, projectile) => {
-      if (scene.world.isPendingDeath(id)) return;
+      if (scene.world.isPendingDeath(id) || projectile.barrage) return;
       const element = projectile.element || 'blink',
         at = scene.world.pos(id),
         pos = { x: at.x, y: at.y - 12 },

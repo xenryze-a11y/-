@@ -27,6 +27,13 @@ export function tickTimers(ctx: Ctx, dt: number): void {
     p.mana = Math.min(p.maxMana, p.mana + CFG.player.manaRegen * dt);
   });
 
+  ctx.s.mage.forEach((_id, mage) => {
+    for (const key of Object.keys(
+      mage.cooldowns,
+    ) as (keyof typeof mage.cooldowns)[])
+      mage.cooldowns[key] = dec(mage.cooldowns[key]);
+  });
+
   ctx.s.mob.forEach((_e, m) => {
     m.atkCd = dec(m.atkCd);
     m.attackAnim = dec(m.attackAnim);

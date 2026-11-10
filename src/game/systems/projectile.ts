@@ -1,4 +1,5 @@
 /** 分段扫掠防止高速秘矢穿墙；碰撞与爆炸均使用同一套地形视线。 */
+import { mageOrbImpact } from './mage';
 import { dist, type Vec2 } from '../../engine/math';
 import { TAG, type Projectile } from '../components';
 import { MAGIC, ITEMS } from '../items';
@@ -54,6 +55,13 @@ function impact(
   pos: Vec2,
   target: number,
 ): void {
+  if (p.barrage) {
+    mageOrbImpact(ctx, pos);
+    if (target && !ctx.s.mob.has(target))
+      applyDamage(ctx, target, p.dmg, p.owner);
+    ctx.world.destroy(id);
+    return;
+  }
   if (p.fromPlayer) {
     if (p.element === 'ember' || !p.element) {
       circleHit(ctx, pos, MAGIC.fireRadius, MAGIC.fireSplash);

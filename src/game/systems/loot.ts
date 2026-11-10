@@ -5,7 +5,7 @@ import { selectedItem } from '../inventory';
 import type { Ctx } from './context';
 
 export function spawnDrop(
-  ctx: Ctx,
+  ctx: Pick<Ctx, 'world' | 's'>,
   x: number,
   y: number,
   kind: ItemId,

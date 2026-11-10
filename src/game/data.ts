@@ -3,6 +3,7 @@
  * demo 阶段先收在一个文件里；要外置就整体搬成 public/data/config.json，
  * 用 fetch 读进来覆盖 CFG 即可，系统代码不用动。
  */
+import { GROVE } from './mage-data';
 import type { FxAnim } from '../engine/animation';
 import { TILE } from '../engine/level';
 import type { MobKind, ShoeMat } from './components';
@@ -27,7 +28,7 @@ export const SHOE_LABEL: Record<ShoeMat, string> = {
 
 export const CFG = {
   seed: 20261109,
-  map: { w: 48, h: 48, tile: TILE },
+  map: { w: GROVE.width, h: GROVE.height, tile: TILE },
 
   player: {
     hp: 120,
@@ -123,7 +124,7 @@ export const CFG = {
 
   spawn: {
     mobs: 34,
-    trees: 28,
+    trees: 44,
     graves: 18,
     crates: 10,
     torches: 10,

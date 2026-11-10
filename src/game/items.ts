@@ -127,11 +127,11 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     desc: '普攻：寒冰箭 · 特殊技：冰霜新星\n冰箭减速，新星短暂冻结附近敌人。',
   },
   storm: {
-    name: '风暴法杖',
+    name: '雷电法杖',
     kind: 'staff',
     stack: 1,
-    color: '#d3bbff',
-    desc: '普攻：连锁闪电 · 特殊技：雷暴领域\n闪电可连锁三个目标，领域持续落雷。',
+    color: '#85e1da',
+    desc: '普攻：连锁闪电\n获得后解锁雷电法师；装备时使用 Q / F / R 三职业技能。',
   },
   ward: {
     name: '星辉法杖',

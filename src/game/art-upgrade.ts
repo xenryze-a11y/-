@@ -2,6 +2,7 @@
 import type { Painter, Spec, Skin } from '../engine/art';
 import type { View } from '../engine/facing';
 import { makeRng } from '../engine/math';
+import { groveSpecs } from './grove-art';
 import { basketballSpecs, drawBasketball } from './basketball-art';
 import { drawSpellMissile } from './spell-art';
 import { PIXEL_FX } from './spell-visuals';
@@ -211,7 +212,7 @@ export function upgradeSpecs(
   drawProp: (p: Painter, kind: string, seed: number) => void,
   drawWeapon: (p: Painter, kind: string) => void,
 ): Spec[] {
-  const specs: Spec[] = basketballSpecs();
+  const specs: Spec[] = [...basketballSpecs(), ...groveSpecs()];
   for (const element of SKILL_IDS) {
     specs.push({
       name: 'staff_' + element,

@@ -2,8 +2,9 @@
 import { BTN, type InputState } from '../../engine/input';
 import { angle, len, norm, fromAngle } from '../../engine/math';
 import { CFG } from '../data';
-import { useSelected } from '../inventory';
+import { useSelected, selectedItem } from '../inventory';
 import { dropSelected } from './loot';
+import { castMage } from './mage';
 import { castSelected } from './magic';
 import type { Ctx } from './context';
 
@@ -16,7 +17,10 @@ export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
   ctx.aimPointer = { ...input.pointer };
   const aim = ctx.camera.toWorld(input.pointer),
     vector = { x: aim.x - pos.x, y: aim.y - pos.y };
-  if (input.aimActive || input.down & (BTN.ATTACK | BTN.CAST)) {
+  if (
+    input.aimActive ||
+    (input.down | input.pressed) & (BTN.ATTACK | BTN.CAST | BTN.ULTIMATE)
+  ) {
     if (len(vector) > 5) f.angle = angle(vector);
   } else if (len(input.move) > 0.1) f.angle = angle(input.move);
   if (input.pressed & BTN.USE) useSelected(ctx);
@@ -55,5 +59,10 @@ export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
     ),
   );
   if (input.down & BTN.ATTACK) castSelected(ctx);
-  if (input.pressed & BTN.CAST) castSelected(ctx, true);
+  if (input.pressed & BTN.FIELD) castMage(ctx, 'field');
+  if (input.pressed & BTN.CAST) {
+    if (selectedItem(ctx)?.id === 'storm') castMage(ctx, 'wave');
+    else castSelected(ctx, true);
+  }
+  if (input.pressed & BTN.ULTIMATE) castMage(ctx, 'barrage');
 }
