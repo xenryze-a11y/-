@@ -127,3 +127,20 @@ Chromium / Playwright 在生产预览实际检查：
 - 全新隔离断网单文件成功解码新武器、技能图标并施放17根魔域地刺，HTTP(S)请求0，页面异常0；桌面与手机检查也无页面异常。
 
 新版实机截图：scythe-storm.png、scythe-claw.png、scythe-spikes.png。来源、参考和两次素材处理流程见assets/README.md，决策见D32–D35。未将被否定的镰刀原稿打包。
+
+
+## 炎剑生成特效、五连焰潮、重像素圣域与持械放大
+
+类型检查、68项模拟回归、普通构建、单文件构建及导出通过。五连焰潮新增覆盖：首波立即、后续四波锁方向并从移动角色处继续、换武器仍完成、每波独立命中 / 墙体扫掠、5波容量原子预留和拒绝覆盖未完成连发。首次只扣18法力、共用一次5秒冷却；每0.18秒发一波。
+
+生产预览Chromium / Playwright检查：
+
+- flameArtReady与sanctuaryArtReady均true，全部图集帧仍共享一个TextureSource且nearest采样。圣使 / 神父各4帧图像内容都不同；CPU逐像素检查NPC每个2×2像素块一致，验证确实先减半再放大。神树 / 祭坛保持原320×352 / 128×96规格及根部锚点。
+- 实际Q触发五波，模型同时5个独立flameWave；待发阶段打开背包0.35秒全部组件 / 世界时间JSON不变，关包继续到5波。实际F第三重劈与R炎躯打开画面确认生成斩光、空心火焰护体、动画和独立冷却。
+- 圣使对话打开后0.4秒全部组件 / 世界时间JSON与NPC当前纹理不变。教堂内屋顶渐退至alpha<.06，神父可对话；外面立即恢复alpha=1、隐藏神父。NPC根部位置不随帧改变，任务 / 治疗门槛仍沿用既有规则。
+- 9种已持有手持物逐个切换并检查4个朝向，武器position与hand1位置始终一致；法杖scale .88、魔镰 / 炎剑 / 旧剑1、弯刃1.18、篮球.75。无改动攻击范围或骨架挂点。
+- 100次三斩事件后burst64 / 粒子320 / 生成斩光6 / 武器残影3封顶，表现sync前后BladeState不变；clear后所有表现统计归零。
+- 390×844触屏装备炎剑并释放五波；844×390可释放炎躯。两布局背包无横向溢出，横屏窗口bottom约382.20，小圆辅助键与漂浮三技能布局保留。页面异常0。
+- 全新隔离断网单文件flameArtReady / sanctuaryArtReady均true，实际触屏同样的技能按钮生成5波，HTTP(S)请求0、页面异常0。
+
+新实机截图：sacred-tree.png、herald-generated.png、priest-generated.png、flame-five-waves.png、flame-cleaves.png、flame-inferno.png。原稿 / 强像素处理 / 帧布局见assets/README.md，决策见D36–D38。

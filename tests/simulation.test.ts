@@ -1537,18 +1537,20 @@ test('each spike arm stops at a wall and its damage cannot leak through that wal
   bladeSteps(c, 2);
   assert.equal(c.s.health.get(hidden)!.hp, 1000);
 });
-test('flame wave pierces each visible enemy once, ignites targets and sweeps against walls without tunneling', () => {
+test('five flame waves each pierce an enemy once, ignite targets and sweep against walls without tunneling', () => {
   const c = arena();
   equipBlade(c, 'greatsword');
   c.s.facing.get(c.player)!.angle = 0;
   const first = mob(c, 675, 600, 1000),
     second = mob(c, 755, 620, 1000);
   castStaffAbility(c, 'field');
-  bladeSteps(c, 0.7);
+  bladeSteps(c, 0.05);
   assert.equal(c.s.health.get(first)!.hp, 970);
-  assert.equal(c.s.health.get(second)!.hp, 970);
+  assert.equal(c.s.health.get(second)!.hp, 1000);
   assert.ok(c.s.mob.get(first)!.burn! > 0);
-  bladeSteps(c, 1);
+  bladeSteps(c, 1.75);
+  assert.equal(c.s.health.get(first)!.hp, 850);
+  assert.equal(c.s.health.get(second)!.hp, 850);
   assert.equal(c.s.flameWave.length, 0);
   const d = arena();
   equipBlade(d, 'greatsword');
@@ -1628,4 +1630,52 @@ test('a released Q touch edge aims the directional flame wave at the supplied ta
   assert.ok(Math.abs(c.s.flameWave.data[0].vx) < 0.001);
   assert.ok(c.s.flameWave.data[0].vy > 0);
   assert.deepEqual(JSON.parse(JSON.stringify(c.s.blade.data)), c.s.blade.data);
+});
+
+test('five-wave burst locks direction, follows the caster origin and completes after switching weapons', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  castStaffAbility(c, 'field');
+  assert.equal(c.s.flameWave.length, 1);
+  assert.equal(c.s.blade.get(c.player)!.waveLeft, 4);
+  assert.equal(player(c).mana, 82);
+  equipBlade(c, 'sabre');
+  c.s.facing.get(c.player)!.angle = Math.PI;
+  c.world.setPos(c.player, { x: 604, y: 610 });
+  bladeSteps(c, 0.19);
+  assert.equal(c.s.flameWave.length, 2);
+  assert.ok(c.s.flameWave.data.every((w) => w.vx === 270 && w.vy === 0));
+  assert.ok(c.s.flameWave.owners.some((id) => c.world.pos(id).y === 610));
+  bladeSteps(c, 0.6);
+  assert.equal(c.s.flameWave.length, 5);
+  assert.equal(c.s.blade.get(c.player)!.waveLeft, 0);
+  assert.equal(
+    c.world
+      .drain()
+      .filter((e) => e.kind === 'bladeArt' && e.ability === 'waveCast').length,
+    5,
+  );
+  bladeSteps(c, 1.1);
+  assert.equal(c.s.flameWave.length, 0);
+});
+test('five-wave capacity is reserved atomically and pending bursts cannot be overwritten', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  castStaffAbility(c, 'field');
+  const state = c.s.blade.get(c.player)!;
+  state.schools.greatsword.cooldowns.field = 0;
+  const mana = player(c).mana;
+  castStaffAbility(c, 'field');
+  assert.equal(player(c).mana, mana);
+  assert.equal(state.waveLeft, 4);
+  assert.equal(c.s.flameWave.length, 1);
+  bladeSteps(c, 0.75);
+  state.schools.greatsword.cooldowns.field = 0;
+  assert.equal(c.s.flameWave.length, 5);
+  const before = player(c).mana;
+  castStaffAbility(c, 'field');
+  assert.equal(player(c).mana, before);
+  assert.equal(state.schools.greatsword.cooldowns.field, 0);
+  assert.equal(c.s.flameWave.length, 5);
 });

@@ -666,9 +666,12 @@ export class WorldView {
     }
     const npc = s.npc.get(e);
     if (npc) {
+      sprite.texture = this.atlas.get(
+        (npc.kind === 'herald' ? 'npcHerald_' : 'npcPriest_') +
+          (Math.floor(this.renderTime * 4) % 4),
+      );
       sprite.anchor.set(0.5, npc.kind === 'herald' ? 94 / 112 : 60 / 64);
-      sprite.y =
-        npc.kind === 'herald' ? -3 - Math.sin(this.renderTime * 1.8) * 2 : 0;
+      sprite.y = npc.kind === 'herald' ? -2 : 0;
       return;
     }
     const summon = s.summon.get(e);

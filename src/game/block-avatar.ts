@@ -124,7 +124,7 @@ export class BlockAvatar {
     } else if (staff && pl.castAnim > 0) rotation = f.angle + Math.PI / 2;
     this.weapon.rotation = rotation;
     this.weapon.scale.set(
-      blade ? blade.scale : staff ? BLOCK_RIG.weaponScale : ball ? 0.65 : 0.85,
+      blade ? blade.scale : staff ? BLOCK_RIG.weaponScale : ball ? 0.75 : 1,
     );
     this.weapon.zIndex = view === 'back' ? 9 : 16;
     const d = s.dodge.get(id);

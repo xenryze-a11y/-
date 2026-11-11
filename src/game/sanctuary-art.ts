@@ -588,6 +588,18 @@ export function sanctuarySpecs(): Spec[] {
   return [
     { name: 'cathedralRoof', w: 544, h: 864, draw: roof },
     { name: 'cathedralInterior', w: 480, h: 704, draw: interior },
+    ...Array.from({ length: 4 }, (_, i) => ({
+      name: 'npcHerald_' + i,
+      w: 96,
+      h: 112,
+      draw: herald,
+    })),
+    ...Array.from({ length: 4 }, (_, i) => ({
+      name: 'npcPriest_' + i,
+      w: 48,
+      h: 64,
+      draw: priest,
+    })),
     { name: 'npcHerald', w: 96, h: 112, draw: herald },
     { name: 'npcPriest', w: 48, h: 64, draw: priest },
     {

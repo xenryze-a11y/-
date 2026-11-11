@@ -118,7 +118,7 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 
 ## 圣域和四部位装备
 
-先读 [SANCTUARY.md](SANCTUARY.md)。区域 / 门洞 / NPC 坐标在 sanctuary-data.ts，地形在 grove.ts，教堂屋面和内饰在 sanctuary-art.ts / sanctuary-view.ts；所有树改为程序绘制，grove-art.ts 仅加载原雷电图标。玩家骨架在 block-rig.ts，部件绘制在 block-art.ts，Sprite 复用在 block-avatar.ts；怪物仍用旧骨架。装备槽为 40 靴子、42 头盔、43 胸甲、44 护腿，41 仍是合成产出，不能复用。
+先读 [SANCTUARY.md](SANCTUARY.md)。区域 / 门洞 / NPC 坐标在 sanctuary-data.ts，地形在 grove.ts，教堂屋面和内饰在 sanctuary-art.ts / sanctuary-view.ts；普通树仍为程序绘制；神树 / 祭坛 / NPC使用generated-flame-sanctuary.ts加载的新重像素生成图，NPC4帧站立动画由renderer的只读时钟驱动，grove-art.ts加载原雷电图标。玩家骨架在 block-rig.ts，部件绘制在 block-art.ts，Sprite 复用在 block-avatar.ts；怪物仍用旧骨架。装备槽为 40 靴子、42 头盔、43 胸甲、44 护腿，41 仍是合成产出，不能复用。
 
 C 发起近距离交谈，quests.ts 决定接受 / 复命 / 祝福 / 治疗；UI 只发 QuestCommand，所有对话期间冻结模拟和表现。打开背包试穿铁甲，或完成圣使 → 神父任务领取晨曦四件套。新旅途重置进度；仍未加入存档和联机。
 
@@ -126,3 +126,8 @@ C 发起近距离交谈，quests.ts 决定接受 / 复命 / 祝福 / 治疗；UI
 ## 三把新兵器
 
 E打开背包，点「装备魔镰 / 装备弯刃 / 装备炎剑」交换到当前快捷格，再E关闭即可试玩；也能手动搬运存储区第19–21格。魔镰和炎剑各有 Q / F / R，弯刃仅左键普攻。内容入口 weapon-data.ts → systems/blades.ts → blade-vfx.ts；纯模拟组件见 ECS.md。修改持握先检查 BLADES 的 frame尺寸、grip与scale，不要另设UI预览挂点。生成素材规范和参考来源见 assets/README.md。
+
+
+## 五连焰潮与新圣域素材
+
+炎剑Q一次扣蓝 / 一次冷却，首波立即、后4波每0.18秒释放；waveLeft / waveTick / waveAngle / waveMultiplier保存在BladeState，方向和伤害倍率在施法时锁定，后续波从当前角色位置发出，换武器仍完成。容量须先预留5波，不能覆盖仍未完成的连发；暂停冻结。火焰特效、圣域帧布局和可选处理脚本见assets/README.md。新站立帧脚底基线固定；生成素材不能改变NPC碰撞或交谈规则。

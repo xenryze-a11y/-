@@ -276,6 +276,10 @@ export interface Journal {
 }
 export interface BladeState {
   schools: Record<BladeProfessionId, ProfessionState>;
+  waveLeft: number;
+  waveTick: number;
+  waveAngle: number;
+  waveMultiplier: number;
   stormLeft: number;
   stormTick: number;
   stormAngle: number;
