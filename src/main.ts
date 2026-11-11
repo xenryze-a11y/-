@@ -6,6 +6,11 @@ import { Input, BTN, type InputState } from './engine/input';
 import { FixedLoop } from './engine/loop';
 import { WorldView } from './engine/renderer';
 import { dist } from './engine/math';
+import {
+  applyExplorationCommand,
+  type ExplorationCommand,
+} from './game/systems/exploration';
+import { nearbyNpc } from './game/systems/quests';
 import { CFG } from './game/data';
 import { ensureEquipmentInstances } from './game/adventure';
 import {
@@ -181,6 +186,29 @@ async function boot(): Promise<void> {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  function explore(command: ExplorationCommand): void {
+    if (
+      !ui.running ||
+      ctx.gameOver ||
+      ui.menuOpen ||
+      ui.inventoryOpen ||
+      ctx.s.journal.get(ctx.player)?.talking
+    )
+      return;
+    const result = applyExplorationCommand(ctx, command);
+    dirty = true;
+    input.reset();
+    pendingEdges = 0;
+    loop.reset();
+    if (result.openMap) ui.setWorldMap(true);
+    if (result.teleported) {
+      ui.worldMap.close();
+      camera.snap(ctx.world.pos(ctx.player));
+      view.sync(scene, 0);
+      view.applyCamera(camera);
+      checkpoint();
+    }
+  }
   view.setScene(scene);
   camera.boundsW = scene.level.pixelW;
   camera.boundsH = scene.level.pixelH;
@@ -198,6 +226,16 @@ async function boot(): Promise<void> {
       pendingEdges = 0;
       loop.reset();
     },
+    interact: () => {
+      if (ui.paused || ctx.gameOver) return;
+      if (nearbyNpc(ctx)) applyQuestCommand(ctx, { type: 'talk' });
+      else explore({ type: 'interact' });
+      dirty = true;
+      input.reset();
+      pendingEdges = 0;
+      loop.reset();
+    },
+    explore,
     restart,
     checkpoint,
     saves: {
@@ -398,6 +436,7 @@ async function boot(): Promise<void> {
         applyInventoryCommand(ctx, cmd);
       },
       inventory: setInventory,
+      explore,
       quest: (command: QuestCommand) => applyQuestCommand(ctx, command),
       cast: (special = false) => castSelected(ctx, special),
       mage: (ability: MageSkillId) => castMage(ctx, ability),

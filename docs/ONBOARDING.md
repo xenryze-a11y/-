@@ -13,7 +13,7 @@ npm run dev
 
 打开 `http://127.0.0.1:5173`。看到一片中世纪地图、模块化方块旅人、几只亡者 = 成功。
 
-素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，G 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「冒险存档」创建/继续正式角色，自动保存；「全武器试用」「祭坛试用」单独重开试用。存档实现见 [SAVES.md](SAVES.md)，后续顺序见 [ROADMAP.md](ROADMAP.md)。
+素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，G 丢一个，M 探索地图，C 对话/地点互动，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「冒险存档」创建/继续正式角色，自动保存；「全武器试用」「祭坛试用」单独重开试用。存档实现见 [SAVES.md](SAVES.md)，后续顺序见 [ROADMAP.md](ROADMAP.md)。
 
 ## 1. 改一个数值（30 秒）
 
@@ -138,3 +138,6 @@ E打开背包，点「装备魔镰 / 装备弯刃 / 装备炎剑」交换到当�
 新环境入口：sanctum-ground.ts（地面材质与花石位置）→ sanctum-rebuilt-art.ts（生成图覆盖与后备帧）→ renderer.rebuildGround（场景一次烘焙）。原稿与布局 / 规范化脚本见assets/README.md。普通树不变，新神树 / 祭坛取消通用椭圆阴影，根床只作地面装饰，不额外阻挡。
 
 Q自动挥五下、每下发一浪；R七秒当前生命与上限翻倍，期间升级正确计入，到期按比例恢复。炎躯Back / Front附在同一玩家根容器，人物头脸位于后火焰上方，不要改回一整张FX顶层Sprite。所有冷却 / 待发波 / 临时生命 / 站立和火焰时钟仍随暂停冻结。
+
+
+第二阶段入口：区域和地标表 `game/world-data.ts`，世界扩展/可达布局 `world-layout.ts`，纯模拟规则 `systems/exploration.ts`，地图只读投影 `exploration-map.ts / world-map-ui.ts`。旧存档格式迁移必须经 saves.ts，不能用新开局覆盖旧世界。说明见 [WORLD_EXPLORATION.md](WORLD_EXPLORATION.md)。

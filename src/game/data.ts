@@ -3,7 +3,7 @@
  * demo 阶段先收在一个文件里；要外置就整体搬成 public/data/config.json，
  * 用 fetch 读进来覆盖 CFG 即可，系统代码不用动。
  */
-import { GROVE } from './mage-data';
+import { WORLD } from './world-data';
 import type { FxAnim } from '../engine/animation';
 import { TILE } from '../engine/level';
 import type { MobKind, ShoeMat } from './components';
@@ -25,12 +25,12 @@ export const SHOE_LABEL: Record<ShoeMat, string> = {
   leather: '皮靴',
   iron: '铁靴',
   zombieBare: '腐足',
-  sanctum:'圣靴',
+  sanctum: '圣靴',
 };
 
 export const CFG = {
   seed: 20261109,
-  map: { w: GROVE.width, h: GROVE.height, tile: TILE },
+  map: { w: WORLD.width, h: WORLD.height, tile: TILE },
 
   player: {
     hp: 120,

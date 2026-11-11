@@ -3,10 +3,13 @@ import { World, type WorldSnapshot } from '../engine/ecs';
 import { Level, type LevelSnapshot } from '../engine/level';
 import { createStores, C, TAG } from './components';
 import { ITEMS } from './items';
+import { createProgress } from './adventure';
+import { initializeExploration } from './exploration-world';
+import { SITES, WORLD } from './world-data';
 import { ensureEquipmentInstances, type AdventureProgress } from './adventure';
 import type { Scene } from './spawn';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2;
 export const SAVE_LIMIT = 2_000_000;
 export const SAVE_PREFIX = 'ashen-vale.save.v1.';
 export interface SaveData {
@@ -133,6 +136,7 @@ const schema: Record<string, Check> = {
     ),
   }),
   [C.MOB]: shape({
+    site: optional(one(...SITES.map((s) => s.id))),
     ...nums('speed aggro atkRange atkCd dmg think attackAnim hurtFlash'),
     ...Object.fromEntries(
       'slow frozen burn burnTick windup charge'
@@ -151,7 +155,12 @@ const schema: Record<string, Check> = {
     hit: optional(ids),
     barrage: optional(bool),
   }),
-  [C.PROP]: shape({ sprite: key, ...nums('w h'), blocks: bool }),
+  [C.PROP]: shape({
+    landmark: optional(one(...SITES.map((s) => s.id))),
+    sprite: key,
+    ...nums('w h'),
+    blocks: bool,
+  }),
   [C.PICKUP]: shape({
     kind: itemId,
     ...nums('count bob'),
@@ -254,7 +263,7 @@ const schema: Record<string, Check> = {
 function fail(message: string): never {
   throw new Error(message);
 }
-function validate(data: unknown): asserts data is SaveData {
+function validate(data: unknown, legacy = false): asserts data is SaveData {
   if (
     !shape({ world: object, level: object, player: uint, progress: object })(
       data,
@@ -278,15 +287,43 @@ function validate(data: unknown): asserts data is SaveData {
       openedChests: array(key),
       purified: array(key),
       bosses: array(key),
+      ...(legacy
+        ? {}
+        : {
+            worldVersion: one(2),
+            discovered: array(one(...SITES.map((s) => s.id)), 18),
+            waypoints: array(
+              one(
+                ...SITES.filter((s) => s.kind === 'waypoint').map((s) => s.id),
+              ),
+              3,
+            ),
+            startedSites: array(
+              one(...SITES.filter((s) => s.guards > 0).map((s) => s.id)),
+              18,
+            ),
+            trackedSite: one('', ...SITES.map((s) => s.id)),
+            lastRegion: one('', 'vale', 'forest', 'sanctum'),
+            campReadyAt: number,
+            travelReadyAt: number,
+          }),
     })(d.progress)
   )
     fail('角色进度数据无效');
   if (
     !shape({
-      w: one(96),
-      h: one(72),
-      tiles: array(one(0, 1, 2, 3, 4, 5, 6), 6912, 6912),
-      southWalls: array(one(0, 1), 6912, 6912),
+      w: one(legacy ? 96 : WORLD.width),
+      h: one(legacy ? 72 : WORLD.height),
+      tiles: array(
+        one(0, 1, 2, 3, 4, 5, 6),
+        legacy ? 6912 : WORLD.width * WORLD.height,
+        legacy ? 6912 : WORLD.width * WORLD.height,
+      ),
+      southWalls: array(
+        one(0, 1),
+        legacy ? 6912 : WORLD.width * WORLD.height,
+        legacy ? 6912 : WORLD.width * WORLD.height,
+      ),
       spawn: vec,
       blockers: array(shape(nums('x y r')), 5000),
       revision: uint,
@@ -507,12 +544,12 @@ export function parseSave(raw: string): SaveRecord {
   }
   if (!object(record) || record.format !== 'ashen-vale')
     fail('这不是灰烬谷存档');
-  if (record.version !== SAVE_VERSION)
+  if (record.version !== 1 && record.version !== SAVE_VERSION)
     fail('存档版本不兼容，请使用对应版本的游戏');
   if (
     !shape({
       format: one('ashen-vale'),
-      version: one(SAVE_VERSION),
+      version: one(1, SAVE_VERSION),
       savedAt: text,
       checksum: text,
       data: object,
@@ -522,7 +559,7 @@ export function parseSave(raw: string): SaveRecord {
     fail('存档信息损坏');
   if (record.checksum !== checksum(JSON.stringify(record.data)))
     fail('存档校验失败，文件可能已损坏');
-  validate(record.data);
+  validate(record.data, record.version === 1);
   return record as unknown as SaveRecord;
 }
 export function restoreSave(record: SaveRecord): Scene {
@@ -531,13 +568,26 @@ export function restoreSave(record: SaveRecord): Scene {
   const world = new World();
   const s = createStores(world);
   world.restore(data.world);
-  return {
+  const scene = {
     world,
     s,
     level: Level.restore(data.level),
     player: data.player,
-    progress: structuredClone(data.progress),
+    progress:
+      record.version === 1
+        ? {
+            ...createProgress(
+              data.progress.seed,
+              'adventure',
+              data.progress.name,
+            ),
+            ...structuredClone(data.progress),
+            worldVersion: 0,
+          }
+        : structuredClone(data.progress),
   };
+  initializeExploration(scene);
+  return scene;
 }
 
 /** 一个槽位一次原子写入，内含当前版和上次有效版；存储失败不破坏旧记录。 */

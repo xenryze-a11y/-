@@ -1,3 +1,4 @@
+import { REGIONS, regionAt } from './world-data';
 /** 存档面板只发动作；文件和浏览器存储由组装层处理。 */
 import { parseSave, SAVE_LIMIT, type SlotResult } from './saves';
 
@@ -167,7 +168,7 @@ export class SaveMenu {
           hero = record.data.world.entities.find(
             (e) => e.id === record.data.player,
           )!,
-          region = hero.position!.x > 1536 ? '古树圣域' : '灰烬谷';
+          region = REGIONS[regionAt(hero.position!)].name;
         detail.textContent = `等级 ${journal.level} · ${region} · ${new Date(record.savedAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}${slot.recovered ? ' · 已从备份恢复' : ''}${active === index ? ' · 当前旅途' : ''}`;
       } else
         detail.textContent = slot.error || '选择此槽创建角色，或导入已有存档';

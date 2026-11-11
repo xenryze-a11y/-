@@ -1,4 +1,7 @@
 import { sanctumGroundFrame, SANCTUM_GARDENS } from '../game/sanctum-ground';
+import { explorationGroundFrame } from '../game/exploration-art';
+import { SITES } from '../game/world-data';
+import { completedSite } from '../game/systems/exploration';
 import { GROVE } from '../game/mage-data';
 /**
  * ECS → Pixi 显示对象。对应 goengine 的 game/scene（只读 World，从不写回）。
@@ -135,7 +138,9 @@ export class WorldView {
     for (let y = 0; y < level.h; y++)
       for (let x = 0; x < level.w; x++) {
         const tile = level.at(x, y),
-          sanctum = sanctumGroundFrame(x, y, tile),
+          sanctum =
+            sanctumGroundFrame(x, y, tile) ||
+            explorationGroundFrame(x, y, tile),
           name = sanctum || TILE_SPRITE[tile === Tile.WALL ? Tile.STONE : tile],
           f = this.atlas.frames[name];
         g.drawImage(
@@ -295,6 +300,36 @@ export class WorldView {
       if (v.block) v.block.sync(scene, e, dt);
       else if (v.parts) this.updateAvatar(v, e, look, scene, dt);
       else if (v.sprite) this.updateStatic(v.sprite, e, look, scene);
+      const landmark = s.prop.get(e)?.landmark;
+      if (landmark && v.sprite) {
+        const definition = SITES.find((d) => d.id === landmark)!;
+        const active =
+          definition.kind === 'waypoint'
+            ? scene.progress.waypoints.includes(landmark)
+            : completedSite(scene, definition);
+        v.sprite.texture = this.atlas.get(
+          look.staticSprite + (active ? 'Active' : ''),
+        );
+        if (!v.npcLabel) {
+          v.npcLabel = new Text({
+            text: definition.name,
+            style: {
+              fontFamily: 'system-ui',
+              fontSize: 9,
+              fill: 0xe6dfbc,
+              stroke: { color: 0x182c29, width: 3 },
+            },
+          });
+          v.npcLabel.anchor.set(0.5, 1);
+          v.npcLabel.y = 18;
+          v.root.addChild(v.npcLabel);
+        }
+        v.npcLabel.visible =
+          Math.hypot(
+            p.x - world.pos(scene.player).x,
+            p.y - world.pos(scene.player).y,
+          ) < 230;
+      }
       const npc = s.npc.get(e);
       if (npc && !v.npcLabel) {
         const def = NPCS[npc.kind];
@@ -339,7 +374,9 @@ export class WorldView {
     }
     for (const [id, v] of this.views)
       if (
-        ['propTree', 'propAncientTree'].includes(v.look.staticSprite || '') &&
+        ['propTree', 'propBlightTree', 'propAncientTree'].includes(
+          v.look.staticSprite || '',
+        ) &&
         v.sprite
       ) {
         const p = world.pos(id),
@@ -385,7 +422,7 @@ export class WorldView {
     const view: EntityView = { root, look, pose: newLimbPose() };
     if (look.staticSprite) {
       const sprite = new Sprite(this.atlas.get(look.staticSprite));
-      const tree = ['propTree', 'propAncientTree'].includes(
+      const tree = ['propTree', 'propBlightTree', 'propAncientTree'].includes(
         look.staticSprite || '',
       );
       sprite.anchor.set(

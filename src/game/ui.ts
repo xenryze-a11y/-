@@ -13,8 +13,15 @@ import {
 import { BTN, type Input } from '../engine/input';
 import type { TextureAtlas } from '../engine/atlas';
 import type { GameEvent } from '../engine/ecs';
-import { Tile } from '../engine/level';
-import { MAGE_IDS, GROVE, type MageSkillId } from './mage-data';
+import { WorldMapUI } from './world-map-ui';
+import { drawExplorationMap, regionCaption } from './exploration-map';
+import { REGIONS, regionAt } from './world-data';
+import {
+  nearbySite,
+  worldSites,
+  type ExplorationCommand,
+} from './systems/exploration';
+import { MAGE_IDS, type MageSkillId } from './mage-data';
 import {
   COMBAT_PROFESSIONS,
   combatIconName,
@@ -42,11 +49,14 @@ export interface UIActions {
   inventory(open: boolean): void;
   restart(grove?: boolean): void;
   quest(command: QuestCommand): void;
+  interact(): void;
+  explore(command: ExplorationCommand): void;
   saves: SaveActions;
   checkpoint(): void;
 }
 export class GameUI {
   readonly saves: SaveMenu;
+  readonly worldMap: WorldMapUI;
   readonly element = document.createElement('div');
   running = false;
   menuOpen = true;
@@ -73,6 +83,7 @@ export class GameUI {
     this.element.innerHTML = UI_TEMPLATE;
     document.body.appendChild(this.element);
     this.saves = new SaveMenu(this.element, actions.saves);
+    this.worldMap = new WorldMapUI(this.element, context, actions.explore);
     this.makeIcons();
     this.makeMageIcons();
     this.preview();
@@ -88,6 +99,7 @@ export class GameUI {
       this.inventoryOpen ||
       this.helpOpen ||
       this.saves.opened ||
+      this.worldMap.opened ||
       !!this.context().s.journal.get(this.context().player)?.talking
     );
   }
@@ -215,9 +227,12 @@ export class GameUI {
       ctx.world.pos(ctx.player),
     )
       ? '晨曦大教堂 · 圣堂内殿'
-      : ctx.world.pos(ctx.player).x > 48 * 32
-        ? '古树祭坛 · 雷电觉醒'
-        : '灰烬谷 · 东行前往古树祭坛';
+      : regionCaption(ctx);
+    this.q('#av-region-name').style.color =
+      ctx.s.journal.get(ctx.player)!.level <
+      REGIONS[regionAt(ctx.world.pos(ctx.player))].levels[0]
+        ? '#efac7f'
+        : '';
   }
   private preview(): void {
     const canvas = this.q<HTMLCanvasElement>('#av-avatar-preview'),
@@ -249,14 +264,24 @@ export class GameUI {
   private updateJournal(ctx: Ctx): void {
     const j = ctx.s.journal.get(ctx.player)!,
       npc = nearbyNpc(ctx),
+      site = npc ? undefined : nearbySite(ctx),
       def = dialogue(ctx),
       open = !!def && !this.menuOpen && !this.inventoryOpen;
     this.q('#av-dialogue').hidden = !open;
     this.element.classList.toggle('talking', open);
-    this.q('#av-interact').hidden = !npc || this.paused;
+    this.q('#av-interact').hidden = (!npc && !site) || this.paused;
     if (npc)
       this.q('#av-interact').textContent =
         '交谈 C · ' + NPCS[ctx.s.npc.get(npc)!.kind].name;
+    if (site)
+      this.q('#av-interact').textContent = 'C · ' + site.definition.name;
+    const tracked = worldSites(ctx).find(
+        (s) => s.definition.id === ctx.progress.trackedSite,
+      ),
+      at = ctx.world.pos(ctx.player);
+    this.q('#av-exploration-objective').textContent = tracked
+      ? `◇ ${tracked.definition.name} · ${Math.round(Math.hypot(tracked.position.x - at.x, tracked.position.y - at.y) / 16)} 米 · ${tracked.position.x > at.x + 32 ? '东' : tracked.position.x < at.x - 32 ? '西' : ''}${tracked.position.y > at.y + 32 ? '南' : tracked.position.y < at.y - 32 ? '北' : ''} · M 地图`
+      : 'M 地图 · 沿道路发现新地点';
     this.q('#av-quest-objective').textContent = questObjective(ctx);
     this.q('#av-xp').textContent =
       `等级 ${j.level} · ${j.xp} / ${levelRequirement(j.level)} 经验`;
@@ -318,7 +343,24 @@ export class GameUI {
     if (open) this.q<HTMLButtonElement>('#av-close-bag').focus();
     else this.q<HTMLButtonElement>('#av-bag-button').blur();
   }
+  setWorldMap(open: boolean): void {
+    if (
+      !this.running ||
+      this.context().gameOver ||
+      this.menuOpen ||
+      this.inventoryOpen ||
+      this.helpOpen ||
+      this.context().s.journal.get(this.context().player)?.talking
+    )
+      return;
+    this.input.reset();
+    if (open) {
+      this.actions.checkpoint();
+      this.worldMap.open();
+    } else this.worldMap.close();
+  }
   setMenu(open: boolean): void {
+    if (open) this.worldMap.close();
     this.menuOpen = open;
     this.input.reset();
     this.q('#av-menu2').hidden = !open;
@@ -337,6 +379,7 @@ export class GameUI {
     this.deathShown = false;
     this.helpOpen = false;
     this.saves.close();
+    this.worldMap.close();
     this.q('#av-help').hidden = true;
     this.setInventory(false);
     this.setMenu(false);
@@ -446,7 +489,10 @@ export class GameUI {
       this.actions.command({ type: 'select', index });
   }
   private events(): void {
-    this.q('#av-interact').onclick = () => this.actions.quest({ type: 'talk' });
+    this.q('#av-interact').onclick = () => this.actions.interact();
+    this.q('#av-map-button').onclick = () =>
+      this.setWorldMap(!this.worldMap.opened);
+    this.q('#av-map').onclick = () => this.setWorldMap(true);
     this.q('#av-dialogue-close').onclick = () =>
       this.actions.quest({ type: 'close' });
     this.q('#av-dialogue-choices').onclick = (e) => {
@@ -637,6 +683,14 @@ export class GameUI {
       handled();
       return;
     }
+    if (this.worldMap.opened) {
+      if (k === 'escape' || k === 'm') {
+        handled();
+        this.worldMap.close();
+      } else if (k === 'tab') e.stopImmediatePropagation();
+      else handled();
+      return;
+    }
     if (k === 'escape') {
       handled();
       if (this.helpOpen) this.setHelp(false);
@@ -659,9 +713,14 @@ export class GameUI {
       handled();
       return;
     }
+    if (k === 'm' && !this.inventoryOpen) {
+      handled();
+      if (!e.repeat) this.setWorldMap(true);
+      return;
+    }
     if (k === 'c' && !this.inventoryOpen) {
       handled();
-      if (!e.repeat) this.actions.quest({ type: 'talk' });
+      if (!e.repeat) this.actions.interact();
       return;
     }
     if (['e', 'tab', 'b'].includes(k)) {
@@ -837,41 +896,6 @@ export class GameUI {
     }
   }
   private drawMap(ctx: Ctx): void {
-    const canvas = this.q<HTMLCanvasElement>('#av-map'),
-      g = canvas.getContext('2d')!,
-      l = ctx.level;
-    const colors: Record<number, string> = {
-      [Tile.GRASS]: '#364e39',
-      [Tile.DIRT]: '#635b41',
-      [Tile.STONE]: '#626b5e',
-      [Tile.WATER]: '#244950',
-      [Tile.FLOOR]: '#786342',
-      [Tile.WALL]: '#b6b097',
-      [Tile.ROAD]: '#a18f67',
-    };
-    for (let y = 0; y < l.h; y++)
-      for (let x = 0; x < l.w; x++) {
-        g.fillStyle = colors[l.at(x, y)];
-        g.fillRect(x * 2, y * 2, 2, 2);
-      }
-    g.strokeStyle = '#d9bc7f';
-    g.strokeRect(106, 68, 30, 44);
-    ctx.s.npc.forEach((id, n) => {
-      const p = ctx.world.pos(id);
-      g.fillStyle = n.kind === 'herald' ? '#e7e4b5' : '#cdbb9a';
-      g.fillRect(p.x / 16 - 2, p.y / 16 - 2, 4, 4);
-    });
-    g.fillStyle = '#73d9b9';
-    g.fillRect(GROVE.altar.x / 16 - 2, GROVE.altar.y / 16 - 2, 4, 4);
-    const pos = ctx.world.pos(ctx.player);
-    g.fillStyle = '#bc6d5c';
-    for (const id of ctx.world.query(pos, 310, 'mob')) {
-      const p = ctx.world.pos(id);
-      g.fillRect(p.x / 16 - 1, p.y / 16 - 1, 2, 2);
-    }
-    g.fillStyle = '#ffe1a0';
-    g.fillRect(pos.x / 16 - 1.5, pos.y / 16 - 1.5, 3, 3);
-    g.strokeStyle = '#ffe1a0';
-    g.strokeRect(pos.x / 16 - 3, pos.y / 16 - 3, 6, 6);
+    drawExplorationMap(this.q<HTMLCanvasElement>('#av-map'), ctx);
   }
 }

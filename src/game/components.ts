@@ -97,6 +97,7 @@ export interface Player {
 export type MobKind = 'shamble' | 'lunge' | 'caster';
 
 export interface Mob {
+  site?: string;
   kind: MobKind;
   speed: number;
   aggro: number;
@@ -132,6 +133,7 @@ export interface Projectile {
 }
 
 export interface Prop {
+  landmark?: string;
   sprite: string;
   w: number;
   h: number;
