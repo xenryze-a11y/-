@@ -42,7 +42,7 @@ function event(
     amount,
   });
 }
-function ignite(ctx: Ctx, id: number): void {
+export function igniteMob(ctx: Ctx, id: number): void {
   const mob = ctx.s.mob.get(id);
   if (!mob) return;
   if ((mob.burn || 0) <= 0) mob.burnTick = STAFF_ARTS.ember.burnPeriod;
@@ -57,7 +57,7 @@ function strike(
 ): void {
   if (damage > 0) applyDamage(ctx, id, damage, ctx.player);
   const mob = ctx.s.mob.get(id);
-  if (mob && school === 'ember') ignite(ctx, id);
+  if (mob && school === 'ember') igniteMob(ctx, id);
   if (mob && school === 'frost') {
     mob.slow = Math.max(mob.slow || 0, STAFF_ARTS.frost.slow);
     mob.frozen = Math.max(mob.frozen || 0, freeze);

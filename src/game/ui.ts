@@ -15,15 +15,13 @@ import type { TextureAtlas } from '../engine/atlas';
 import type { GameEvent } from '../engine/ecs';
 import { Tile } from '../engine/level';
 import { MAGE_IDS, GROVE, type MageSkillId } from './mage-data';
-import { STAFF_PROFESSIONS, staffIconName } from './staff-data';
-import { selectedProfession, professionState } from './systems/profession';
 import {
-  ITEMS,
-  ABILITIES,
-  isAbility,
-  type SkillId,
-  type ItemId,
-} from './items';
+  COMBAT_PROFESSIONS,
+  combatIconName,
+  type CombatProfessionId,
+} from './weapon-data';
+import { selectedProfession, professionState } from './systems/profession';
+import { ITEMS, ABILITIES, isAbility, type ItemId } from './items';
 import {
   getSlot,
   recipe,
@@ -112,13 +110,13 @@ export class GameUI {
       this.icons[id] = c.toDataURL();
     }
   }
-  private iconSchool?: SkillId;
-  private lastStaff: SkillId = 'ember';
-  private makeMageIcons(school: SkillId = 'ember'): void {
+  private iconSchool?: CombatProfessionId;
+  private lastStaff: CombatProfessionId = 'ember';
+  private makeMageIcons(school: CombatProfessionId = 'ember'): void {
     if (this.iconSchool === school) return;
     this.iconSchool = school;
     for (const id of MAGE_IDS) {
-      const frame = this.atlas.frames[staffIconName(school, id)],
+      const frame = this.atlas.frames[combatIconName(school, id)],
         canvas = document.createElement('canvas');
       canvas.width = 64;
       canvas.height = 64;
@@ -135,11 +133,14 @@ export class GameUI {
     if (selected) this.lastStaff = selected;
     const school = selected || this.lastStaff,
       state = professionState(ctx, school),
-      role = STAFF_PROFESSIONS[school],
+      role = COMBAT_PROFESSIONS[school],
       active = !!selected && state.unlocked;
     this.makeMageIcons(school);
     this.q('#av-combat').style.setProperty('--school-accent', role.color);
-    this.q('#av-utilities [data-action=cast]').hidden = !!selected;
+    const held = this.inventory.slots[this.inventory.selected]?.id,
+      sabre = held === 'sabre';
+    this.q('#av-utilities [data-action=cast]').hidden =
+      !!selected || !['sword', 'basketball'].includes(held || '');
     this.q('#av-utilities').classList.toggle('av-utils-weapon', !selected);
     this.q('#av-class-skills').hidden = !active;
     this.q('#av-class-skills').setAttribute(
@@ -147,14 +148,19 @@ export class GameUI {
       role.name + '专属三技能',
     );
     this.q('#av-class-hint').hidden = active;
-    this.q('#av-class-hint').textContent = state.unlocked
-      ? '装备法杖 · 启用职业技能'
-      : '古树祭坛 · 寻找雷电法杖';
-    this.q('#av-class-caption').textContent = active
-      ? role.title + ' · ' + role.name
+    this.q<HTMLButtonElement>('#av-class-hint').disabled = sabre;
+    this.q('#av-class-hint').textContent = sabre
+      ? '月弧弯刃 · 无主动技能'
       : state.unlocked
-        ? '法杖职业 · Q / F / R'
-        : 'ANCIENT GROVE · 古树祭坛';
+        ? '装备技能武器 · Q / F / R'
+        : '古树祭坛 · 寻找雷电法杖';
+    this.q('#av-class-caption').textContent = sabre
+      ? 'CURVED SABRE · 月弧弯刃'
+      : active
+        ? role.title + ' · ' + role.name
+        : state.unlocked
+          ? '武器秘技 · Q / F / R'
+          : 'ANCIENT GROVE · 古树祭坛';
     for (const id of MAGE_IDS) {
       const button = this.q<HTMLButtonElement>(`[data-mage="${id}"]`),
         remaining = state.cooldowns[id],
@@ -393,6 +399,13 @@ export class GameUI {
     cursor.hidden = !inv.cursor;
     if (inv.cursor)
       cursor.innerHTML = `<img src="${this.icons[inv.cursor.id]}" alt="">${ITEMS[inv.cursor.id].name} ×${inv.cursor.count}`;
+    for (const button of this.element.querySelectorAll<HTMLButtonElement>(
+      '[data-equip-weapon]',
+    )) {
+      const id = button.dataset.equipWeapon as ItemId;
+      button.disabled =
+        !!inv.cursor || !inv.slots.some((item) => item?.id === id);
+    }
     this.lastInventory = inv;
     this.lastRevision = inv.revision;
   }
@@ -437,6 +450,15 @@ export class GameUI {
             | 'close',
         });
     };
+    for (const button of this.element.querySelectorAll<HTMLButtonElement>(
+      '[data-equip-weapon]',
+    ))
+      button.onclick = () => {
+        this.actions.command({
+          type: 'equip',
+          id: button.dataset.equipWeapon as ItemId,
+        });
+      };
     this.q('#av-start2').onclick = () => this.actions.restart();
     this.q('#av-start-grove').onclick = () => this.actions.restart(true);
     this.q('#av-utility-bag').onclick = () => {
@@ -451,7 +473,15 @@ export class GameUI {
         index = this.inventory.slots.findIndex(
           (item) =>
             item &&
-            ['ember', 'frost', 'storm', 'ward', 'blink'].includes(item.id),
+            [
+              'ember',
+              'frost',
+              'storm',
+              'ward',
+              'blink',
+              'scythe',
+              'greatsword',
+            ].includes(item.id),
         );
       if (index >= 0 && index < 9)
         this.actions.command({ type: 'select', index });
@@ -707,8 +737,9 @@ export class GameUI {
     this.q('#av-health-fill').style.width =
       100 * Math.max(0, hp.hp / hp.max) + '%';
     this.q('#av-mana-fill').style.width = (100 * p.mana) / p.maxMana + '%';
+    const inferno = ctx.s.blade.get(ctx.player)!.infernoLeft;
     this.q('#av-kills').textContent =
-      `击败 ${p.kills}  ·  ${p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
+      `击败 ${p.kills}  ·  ${inferno > 0 ? '炎躯 ' + inferno.toFixed(1) + '秒' : p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
     this.q('#av-level').textContent = String(
       ctx.s.journal.get(ctx.player)!.level,
     ).padStart(2, '0');

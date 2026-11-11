@@ -2,6 +2,8 @@
 import type { Painter, Spec, Skin } from '../engine/art';
 import type { View } from '../engine/facing';
 import { makeRng } from '../engine/math';
+import { bladeSpecs, drawBlade } from './blade-art';
+import { BLADES, isBlade } from './weapon-data';
 import { sanctuarySpecs } from './sanctuary-art';
 import { blockSpecs, drawArmorIcon } from './block-art';
 import { staffSpecs } from './staff-art';
@@ -221,6 +223,7 @@ export function upgradeSpecs(
     ...staffSpecs(),
     ...sanctuarySpecs(),
     ...blockSpecs(),
+    ...bladeSpecs(),
   ];
   for (const element of SKILL_IDS) {
     specs.push({
@@ -252,7 +255,18 @@ export function upgradeSpecs(
       w: 40,
       h: 40,
       draw: (p) => {
-        if (item.kind === 'staff') {
+        if (isBlade(id)) {
+          const d = BLADES[id],
+            scale = 34 / Math.max(d.width, d.height);
+          p.ctx.save();
+          p.ctx.translate(
+            (40 - d.width * scale) / 2,
+            (40 - d.height * scale) / 2,
+          );
+          p.ctx.scale(scale, scale);
+          drawBlade(p, id);
+          p.ctx.restore();
+        } else if (item.kind === 'staff') {
           p.line(12, 33, 25, 10, '#232a25', 5);
           p.line(13, 33, 25, 10, '#a08a5e', 2);
           p.line(16, 28, 18, 28, '#d2ba7d', 3);

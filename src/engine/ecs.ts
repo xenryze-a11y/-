@@ -73,6 +73,7 @@ export interface GameEvent {
     | 'basketball'
     | 'mage'
     | 'staffArt'
+    | 'bladeArt'
     | 'impact'
     | 'hurt'
     | 'playerHurt'

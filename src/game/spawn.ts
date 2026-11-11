@@ -95,6 +95,25 @@ export function buildScene(seed = CFG.seed): Scene {
     xp: 0,
   });
   s.inventory.set(player, createInventory());
+  s.blade.set(player, {
+    schools: {
+      scythe: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },
+      greatsword: {
+        unlocked: true,
+        cooldowns: { field: 0, wave: 0, barrage: 0 },
+      },
+    },
+    stormLeft: 0,
+    stormTick: 0,
+    stormAngle: 0,
+    infernoLeft: 0,
+    infernoTick: 0,
+    comboLeft: 0,
+    comboTick: 0,
+    comboPhase: 0,
+    comboAngle: 0,
+    comboMultiplier: 1,
+  });
   s.mage.set(player, {
     schools: {
       ember: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },

@@ -7,6 +7,8 @@
  */
 import { Rectangle, Texture } from 'pixi.js';
 import { buildProceduralAtlas, type AtlasFrame, type BuiltAtlas } from './art';
+import { applyGeneratedScytheVfx } from '../game/generated-scythe-vfx';
+import { applyGeneratedBlades } from '../game/generated-blades';
 import { applyStaffArt } from '../game/staff-art';
 import { applyGroveArt } from '../game/grove-art';
 import { applyBasketballAssets } from '../game/basketball-assets';
@@ -68,6 +70,8 @@ export class TextureAtlas {
   readonly basketballAssetsReady: boolean;
   readonly groveArtReady: boolean;
   readonly staffArtReady: boolean;
+  readonly bladeArtReady: boolean;
+  readonly scytheVfxReady: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
@@ -78,6 +82,8 @@ export class TextureAtlas {
     basketballAssetsReady = false,
     groveArtReady = false,
     staffArtReady = false,
+    bladeArtReady = false,
+    scytheVfxReady = false,
   ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
@@ -86,6 +92,8 @@ export class TextureAtlas {
     this.basketballAssetsReady = basketballAssetsReady;
     this.groveArtReady = groveArtReady;
     this.staffArtReady = staffArtReady;
+    this.bladeArtReady = bladeArtReady;
+    this.scytheVfxReady = scytheVfxReady;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
@@ -108,6 +116,8 @@ export class TextureAtlas {
     const basketballReady = await applyBasketballAssets(built);
     const groveReady = await applyGroveArt(built);
     const staffReady = await applyStaffArt(built);
+    const bladeReady = await applyGeneratedBlades(built);
+    const scytheReady = await applyGeneratedScytheVfx(built);
     if (
       external &&
       Object.entries(built.frames).every(
@@ -131,6 +141,8 @@ export class TextureAtlas {
       basketballReady,
       groveReady,
       staffReady,
+      bladeReady,
+      scytheReady,
     );
   }
 

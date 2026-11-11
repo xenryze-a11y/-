@@ -1,0 +1,68 @@
+[
+  {
+    "id": "scythe",
+    "x": 0,
+    "w": 72,
+    "h": 96,
+    "sourceBounds": [
+      130,
+      27,
+      642,
+      1721
+    ],
+    "sourceGrip": [
+      272.5,
+      1369
+    ],
+    "targetGrip": [
+      22,
+      74
+    ],
+    "drawX": 14,
+    "drawWidth": 34
+  },
+  {
+    "id": "sabre",
+    "x": 72,
+    "w": 40,
+    "h": 56,
+    "sourceBounds": [
+      27,
+      64,
+      240,
+      1411
+    ],
+    "sourceGrip": [
+      122.80597014925372,
+      1249
+    ],
+    "targetGrip": [
+      13,
+      45
+    ],
+    "drawX": 9,
+    "drawWidth": 9
+  },
+  {
+    "id": "greatsword",
+    "x": 112,
+    "w": 48,
+    "h": 88,
+    "sourceBounds": [
+      20,
+      10,
+      344,
+      1487
+    ],
+    "sourceGrip": [
+      195.5,
+      1259
+    ],
+    "targetGrip": [
+      24,
+      70
+    ],
+    "drawX": 14,
+    "drawWidth": 19
+  }
+]

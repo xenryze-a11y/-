@@ -1,4 +1,6 @@
 /** 技能只改模拟与发事件；环形粒子、闪电折线与震屏由 present.ts 消费。 */
+import { isBlade } from '../weapon-data';
+import { attackBlade, castBladeAbility } from './blades';
 import { summonBasketballs } from './basketball';
 import { angleDiff, dist, norm, type Vec2 } from '../../engine/math';
 import { TAG } from '../components';
@@ -161,6 +163,12 @@ export function castSelected(ctx: Ctx, special = false): void {
     pos = { ...ctx.world.pos(ctx.player) };
   if (kind === 'basketball') {
     summonBasketballs(ctx);
+    return;
+  }
+  if (isBlade(item.id)) {
+    if (special) {
+      if (item.id !== 'sabre') castBladeAbility(ctx, item.id, 'wave');
+    } else attackBlade(ctx, item.id);
     return;
   }
   if (kind === 'sword') {
