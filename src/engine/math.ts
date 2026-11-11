@@ -19,15 +19,20 @@ export function norm(v: Vec2): Vec2 {
   return l > 1e-6 ? { x: v.x / l, y: v.y / l } : vec();
 }
 
-export const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.y - b.y);
+export const dist = (a: Vec2, b: Vec2): number =>
+  Math.hypot(a.x - b.x, a.y - b.y);
 export const angle = (v: Vec2): number => Math.atan2(v.y, v.x);
-export const fromAngle = (a: number, l = 1): Vec2 => ({ x: Math.cos(a) * l, y: Math.sin(a) * l });
+export const fromAngle = (a: number, l = 1): Vec2 => ({
+  x: Math.cos(a) * l,
+  y: Math.sin(a) * l,
+});
 
 export function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;
 }
 
-export const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
+export const lerp = (a: number, b: number, t: number): number =>
+  a + (b - a) * t;
 
 /** 帧率无关的指数平滑：smooth = 1 - e^(-k·dt)。Go 引擎的 Camera.Follow 同款。 */
 export const smooth = (k: number, dt: number): number => 1 - Math.exp(-k * dt);
@@ -41,13 +46,23 @@ export function angleDiff(a: number, b: number): number {
 }
 
 /** 确定性随机（种子可复现），对应 Go 引擎的 seed RNG。 */
-export function makeRng(seed: number): () => number {
+export interface SeededRng {
+  (): number;
+  getState(): number;
+  setState(state: number): void;
+}
+export function makeRng(seed: number): SeededRng {
   let s = seed >>> 0;
-  return () => {
+  const rng = () => {
     s = (s + 0x6d2b79f5) >>> 0;
     let t = s;
     t = Math.imul(t ^ (t >>> 15), t | 1);
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+  rng.getState = () => s;
+  rng.setState = (state: number) => {
+    s = state >>> 0;
+  };
+  return rng;
 }

@@ -7,6 +7,14 @@ import { FixedLoop } from './engine/loop';
 import { WorldView } from './engine/renderer';
 import { dist } from './engine/math';
 import { CFG } from './game/data';
+import { ensureEquipmentInstances } from './game/adventure';
+import {
+  SaveRepository,
+  captureSave,
+  parseSave,
+  restoreSave,
+  type SaveRecord,
+} from './game/saves';
 import { GameUI } from './game/ui';
 import {
   applyInventoryCommand,
@@ -28,7 +36,7 @@ import { updateMage, castMage } from './game/systems/mage';
 import { GROVE } from './game/mage-data';
 import type { MageSkillId } from './game/mage-data';
 import { updateSummons } from './game/systems/basketball';
-import { resetRules, updateRules } from './game/systems/rules';
+import { updateRules } from './game/systems/rules';
 import type { Ctx } from './game/systems/context';
 
 async function boot(): Promise<void> {
@@ -70,9 +78,46 @@ async function boot(): Promise<void> {
     pendingEdges = 0,
     fps = 60;
   const commands: InventoryCommand[] = [];
+  const saves = new SaveRepository({
+    getItem: (key) => window.localStorage.getItem(key),
+    setItem: (key, value) => window.localStorage.setItem(key, value),
+  });
+  let activeSlot: number | null = null,
+    uiReady = false,
+    dirty = false,
+    lastSavedTime = 0,
+    lastSavedWall = 0,
+    lastSaveError = '',
+    lastSavedAt = '';
   function processCommands(): void {
+    if (commands.length) dirty = true;
     for (const command of commands.splice(0))
       applyInventoryCommand(ctx, command);
+    ensureEquipmentInstances(ctx);
+  }
+  function saveCurrent(): void {
+    if (!uiReady || activeSlot === null || !ui.running || ctx.gameOver) return;
+    processCommands();
+    ctx.world.flush();
+    const record = captureSave(scene);
+    saves.write(activeSlot, record);
+    lastSavedAt = record.savedAt;
+    lastSavedTime = ctx.world.time;
+    lastSavedWall = performance.now();
+    dirty = false;
+    lastSaveError = '';
+  }
+  function checkpoint(): void {
+    try {
+      saveCurrent();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '浏览器存储不可用';
+      if (uiReady && message !== lastSaveError)
+        ui.toast('自动保存失败 · 请在存档菜单导出备份');
+      lastSaveError = message;
+      lastSavedWall = performance.now();
+    }
   }
   function setInventory(open: boolean): void {
     if (!ui.running || ctx.gameOver) return;
@@ -82,13 +127,11 @@ async function boot(): Promise<void> {
     pendingEdges = 0;
     loop.reset();
   }
-  function restart(grove = false): void {
-    scene = buildScene(CFG.seed + ++run * 7919);
+  function installScene(next: Scene): void {
+    scene = next;
     ctx = makeCtx(scene);
-    if (grove) scene.world.setPos(scene.player, { ...GROVE.start });
     view.setScene(scene);
     present.clear();
-    resetRules();
     camera.boundsW = scene.level.pixelW;
     camera.boundsH = scene.level.pixelH;
     camera.snap(scene.world.pos(scene.player));
@@ -99,6 +142,44 @@ async function boot(): Promise<void> {
     ui.restarted();
     view.sync(scene, 0);
     view.applyCamera(camera);
+    dirty = false;
+    lastSavedTime = ctx.world.time;
+    lastSavedWall = performance.now();
+    lastSaveError = '';
+    lastSavedAt = '';
+    if (ctx.s.inventory.get(ctx.player)!.cursor) ui.setInventory(true);
+  }
+  function restart(grove = false): void {
+    checkpoint();
+    activeSlot = null;
+    const next = buildScene(CFG.seed + ++run * 7919);
+    if (grove) next.world.setPos(next.player, { ...GROVE.start });
+    installScene(next);
+    ui.toast('武器试用 · 不覆盖冒险存档');
+  }
+  function loadRecord(slot: number, record: SaveRecord): void {
+    const next = restoreSave(record);
+    // 换槽先保存当前旅途；同槽读档是回退，不能先覆盖待读取的记录。
+    if (activeSlot !== slot) checkpoint();
+    activeSlot = slot;
+    installScene(next);
+    lastSavedAt = record.savedAt;
+    ui.toast('已继续「' + next.progress.name + '」· 冷却与持续技能已恢复');
+  }
+  function exportRecord(slot: number | null): void {
+    processCommands();
+    ctx.world.flush();
+    const record = slot === null ? captureSave(scene) : saves.read(slot).record;
+    if (!record) throw new Error('此槽没有可导出的存档');
+    const blob = new Blob([JSON.stringify(record)], {
+        type: 'application/json',
+      }),
+      url = URL.createObjectURL(blob),
+      link = document.createElement('a');
+    link.href = url;
+    link.download = `灰烬谷-${record.data.progress.name.replace(/[^\p{L}\p{N}_-]/gu, '_')}-${record.savedAt.slice(0, 10)}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   view.setScene(scene);
   camera.boundsW = scene.level.pixelW;
@@ -106,17 +187,81 @@ async function boot(): Promise<void> {
   camera.snap(scene.level.spawn);
   view.sync(scene, 0);
   view.applyCamera(camera);
-  const ui = new GameUI(atlas, input, () => ctx, {
+  const ui: GameUI = new GameUI(atlas, input, () => ctx, {
     command: (cmd) => commands.push(cmd),
     inventory: setInventory,
     quest: (command) => {
       if (!ui.running || ui.menuOpen || ui.inventoryOpen) return;
       applyQuestCommand(ctx, command);
+      dirty = true;
       input.reset();
       pendingEdges = 0;
       loop.reset();
     },
     restart,
+    checkpoint,
+    saves: {
+      list: () => [0, 1, 2].map((slot) => saves.read(slot)),
+      activeSlot: () => activeSlot,
+      status: (): string =>
+        activeSlot === null
+          ? uiReady && ui.running
+            ? '武器试用不会写入冒险存档'
+            : '正式冒险自动保存 · 武器试用独立'
+          : lastSaveError
+            ? `第 ${activeSlot + 1} 槽 · 保存失败，请导出备份（${lastSaveError}）`
+            : `第 ${activeSlot + 1} 槽 · ${lastSavedAt ? '已保存 ' + new Date(lastSavedAt).toLocaleTimeString('zh-CN', { hour12: false }) : '尚未保存'}`,
+      save: () => {
+        if (activeSlot === null || ctx.gameOver)
+          throw new Error('请先开始或继续一段冒险');
+        try {
+          saveCurrent();
+        } catch {
+          throw new Error('浏览器存储不可用或已满，请导出当前旅途备份');
+        }
+      },
+      newGame: (slot, name) => {
+        checkpoint();
+        const next = buildScene(
+          (Date.now() + ++run * 7919) >>> 0,
+          'adventure',
+          name,
+        );
+        activeSlot = slot;
+        installScene(next);
+        checkpoint();
+        ui.toast(
+          lastSaveError
+            ? '当前旅途暂未保存 · 请从存档菜单导出备份'
+            : `「${name}」启程 · 自动保存已开启`,
+        );
+      },
+      load: (slot) => {
+        const result = saves.read(slot);
+        if (!result.record) throw new Error(result.error || '此槽还没有角色');
+        loadRecord(slot, result.record);
+        if (result.recovered) ui.toast('主存档损坏 · 已恢复上次有效备份');
+      },
+      export: exportRecord,
+      import: (slot, raw) => {
+        const record = parseSave(raw),
+          next = restoreSave(record);
+        if (activeSlot !== slot) checkpoint();
+        saves.write(slot, record);
+        activeSlot = slot;
+        installScene(next);
+        lastSavedAt = record.savedAt;
+        ui.toast('导入成功 · 已继续这段旅途');
+      },
+    },
+  });
+  uiReady = true;
+  window.addEventListener('pagehide', checkpoint);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      checkpoint();
+      if (ui.running && !ctx.gameOver) ui.setMenu(true);
+    }
   });
   window.addEventListener('resize', () => {
     camera.w = app.screen.width;
@@ -173,6 +318,7 @@ async function boot(): Promise<void> {
         updateSummons(ctx, _fixed);
         updateRules(ctx);
         ctx.world.flush();
+        ensureEquipmentInstances(ctx);
       });
       const playerAt = ctx.world.pos(ctx.player);
       camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
@@ -211,6 +357,19 @@ async function boot(): Promise<void> {
         .stroke({ width: 1, color: 0xe6ddbb, alpha: 0.8 });
     }
     ui.update(ctx, realDT, fps);
+    if (
+      events.some(
+        (e) => e.kind === 'kill' || e.kind === 'pickup' || e.kind === 'notice',
+      )
+    )
+      dirty = true;
+    if (
+      activeSlot !== null &&
+      !ctx.gameOver &&
+      performance.now() - lastSavedWall > 1000 &&
+      (dirty || ctx.world.time - lastSavedTime >= 20)
+    )
+      checkpoint();
   });
   (window as unknown as { __ASHEN__: unknown }).__ASHEN__ = {
     atlas,
@@ -222,6 +381,18 @@ async function boot(): Promise<void> {
     ui,
     dumpAtlas: () => atlas.dump(),
     restart,
+    saves: {
+      repository: saves,
+      capture: () => captureSave(scene),
+      restore: loadRecord,
+      checkpoint,
+      get activeSlot() {
+        return activeSlot;
+      },
+      get error() {
+        return lastSaveError;
+      },
+    },
     actions: {
       command: (cmd: InventoryCommand) => {
         applyInventoryCommand(ctx, cmd);

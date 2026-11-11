@@ -7,6 +7,14 @@ import type { Ctx } from './systems/context';
 export interface ItemStack {
   id: ItemId;
   count: number;
+  instance?: EquipmentInstance;
+}
+/** 强化、词缀和符文的逐件数据入口；现阶段保留零级空配置。 */
+export interface EquipmentInstance {
+  uid: string;
+  upgrade: number;
+  affixes: { id: string; value: number }[];
+  runes: Record<string, string>;
 }
 export interface InventoryState {
   slots: (ItemStack | null)[];
@@ -23,7 +31,9 @@ export type InventoryCommand =
   | { type: 'slot'; index: number; right: boolean; shift: boolean }
   | { type: 'craft' };
 
-export function createInventory(): InventoryState {
+export function createInventory(
+  mode: 'adventure' | 'trial' = 'trial',
+): InventoryState {
   const slots: (ItemStack | null)[] = Array.from(
     { length: INVENTORY.slots },
     () => null,
@@ -54,6 +64,15 @@ export function createInventory(): InventoryState {
   slots[18] = { id: 'scythe', count: 1 };
   slots[19] = { id: 'sabre', count: 1 };
   slots[20] = { id: 'greatsword', count: 1 };
+  if (mode === 'adventure') {
+    slots.fill(null);
+    slots[0] = { id: 'sword', count: 1 };
+    slots[1] = { id: 'ember', count: 1 };
+    slots[6] = { id: 'health', count: 3 };
+    slots[7] = { id: 'mana', count: 3 };
+    slots[9] = { id: 'wood', count: 4 };
+    slots[10] = { id: 'herb', count: 2 };
+  }
   return {
     slots,
     craft: [null, null, null, null],
@@ -74,6 +93,7 @@ export function addItem(
   slots: (ItemStack | null)[],
   id: ItemId,
   count: number,
+  instance?: EquipmentInstance,
 ): number {
   for (const item of slots)
     if (item?.id === id && item.count < ITEMS[id].stack) {
@@ -85,7 +105,7 @@ export function addItem(
   for (let i = 0; i < slots.length; i++)
     if (!slots[i]) {
       const n = Math.min(count, ITEMS[id].stack);
-      slots[i] = { id, count: n };
+      slots[i] = { id, count: n, ...(instance ? { instance } : {}) };
       count -= n;
       if (!count) return 0;
     }
@@ -130,7 +150,7 @@ export function selectedItem(ctx: Ctx): ItemStack | null {
   const inv = ctx.s.inventory.get(ctx.player);
   return inv?.slots[inv.selected] ?? null;
 }
-export function syncEquipment(ctx: Ctx): void {
+export function syncEquipment(ctx: Pick<Ctx, 's' | 'player'>): void {
   const inv = ctx.s.inventory.get(ctx.player),
     p = ctx.s.player.get(ctx.player),
     eq = ctx.s.equip.get(ctx.player);
@@ -158,7 +178,12 @@ export function syncEquipment(ctx: Ctx): void {
 export function returnCursor(ctx: Ctx): boolean {
   const inv = ctx.s.inventory.get(ctx.player)!;
   if (inv.cursor) {
-    const remaining = addItem(inv.slots, inv.cursor.id, inv.cursor.count);
+    const remaining = addItem(
+      inv.slots,
+      inv.cursor.id,
+      inv.cursor.count,
+      inv.cursor.instance,
+    );
     inv.revision++;
     if (remaining) {
       inv.cursor.count = remaining;
@@ -228,13 +253,18 @@ export function applyInventoryCommand(ctx: Ctx, cmd: InventoryCommand): void {
       const start = index < 9 ? 9 : 0,
         end = index < 9 ? 36 : index < 36 ? 9 : 36;
       const destination = inv.slots.slice(start, end),
-        remaining = addItem(destination, source.id, source.count);
+        remaining = addItem(
+          destination,
+          source.id,
+          source.count,
+          source.instance,
+        );
       for (let i = start; i < end; i++) inv.slots[i] = destination[i - start];
       if (remaining) source.count = remaining;
       else setSlot(inv, index, null);
     } else if (!cursor && source) {
       const count = cmd.right ? Math.ceil(source.count / 2) : source.count;
-      inv.cursor = { id: source.id, count };
+      inv.cursor = { ...source, count };
       source.count -= count;
       if (!source.count) setSlot(inv, index, null);
     } else if (cursor) {
@@ -251,9 +281,9 @@ export function applyInventoryCommand(ctx: Ctx, cmd: InventoryCommand): void {
       }
       if (!source) {
         const count = cmd.right ? 1 : cursor.count;
-        setSlot(inv, index, { id: cursor.id, count });
+        setSlot(inv, index, { ...cursor, count });
         cursor.count -= count;
-      } else if (source.id === cursor.id) {
+      } else if (source.id === cursor.id && ITEMS[source.id].stack > 1) {
         const count = Math.min(
           cmd.right ? 1 : cursor.count,
           ITEMS[source.id].stack - source.count,

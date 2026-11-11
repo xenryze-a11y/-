@@ -31,17 +31,22 @@ import {
 } from './inventory';
 import type { Ctx } from './systems/context';
 import { UI_TEMPLATE } from './ui-template';
+import { SaveMenu, type SaveActions } from './save-menu';
 import './ui.css';
 import './mage-ui.css';
 import './sanctuary-ui.css';
+import './save-ui.css';
 
 export interface UIActions {
   command(command: InventoryCommand): void;
   inventory(open: boolean): void;
   restart(grove?: boolean): void;
   quest(command: QuestCommand): void;
+  saves: SaveActions;
+  checkpoint(): void;
 }
 export class GameUI {
+  readonly saves: SaveMenu;
   readonly element = document.createElement('div');
   running = false;
   menuOpen = true;
@@ -67,6 +72,7 @@ export class GameUI {
     this.element.id = 'av2';
     this.element.innerHTML = UI_TEMPLATE;
     document.body.appendChild(this.element);
+    this.saves = new SaveMenu(this.element, actions.saves);
     this.makeIcons();
     this.makeMageIcons();
     this.preview();
@@ -81,6 +87,7 @@ export class GameUI {
       this.menuOpen ||
       this.inventoryOpen ||
       this.helpOpen ||
+      this.saves.opened ||
       !!this.context().s.journal.get(this.context().player)?.talking
     );
   }
@@ -307,6 +314,7 @@ export class GameUI {
     this.q('#av-inventory').hidden = !open;
     this.q('#av-tooltip').hidden = true;
     this.renderInventory();
+    if (open) this.actions.checkpoint();
     if (open) this.q<HTMLButtonElement>('#av-close-bag').focus();
     else this.q<HTMLButtonElement>('#av-bag-button').blur();
   }
@@ -315,15 +323,20 @@ export class GameUI {
     this.input.reset();
     this.q('#av-menu2').hidden = !open;
     this.q('#av-resume').hidden = !this.running || this.context().gameOver;
-    this.q('#av-start2').textContent = this.running ? '重新启程' : '进入灰烬谷';
+    this.q('#av-start2').textContent = '全武器试用';
     this.q('#av-menu-desc').textContent = this.context().gameOver
-      ? '旅途在此暂歇。带上新的补给，再一次踏入灰烬谷。'
-      : '神树重新焕发生机。与圣使交谈，探索南侧晨曦大教堂，寻找属于你的圣甲。';
+      ? '旅途在此暂歇。可从冒险存档继续上次保存的进度，或进入武器试用。'
+      : '从一柄长剑与余烬法杖开始，探索神树与古老教堂。旅途会在此留下记忆。';
+    if (open) {
+      this.actions.checkpoint();
+      this.saves.refresh();
+    }
   }
   restarted(): void {
     this.running = true;
     this.deathShown = false;
     this.helpOpen = false;
+    this.saves.close();
     this.q('#av-help').hidden = true;
     this.setInventory(false);
     this.setMenu(false);
@@ -596,6 +609,18 @@ export class GameUI {
       e.preventDefault();
       e.stopImmediatePropagation();
     };
+    if (e.target instanceof HTMLInputElement) {
+      if (k === 'escape') {
+        handled();
+        this.saves.close();
+      } else e.stopImmediatePropagation();
+      return;
+    }
+    if (this.saves.opened) {
+      if (k === 'escape') this.saves.close();
+      if (k !== 'tab') handled();
+      return;
+    }
     if (
       !this.menuOpen &&
       this.context().s.journal.get(this.context().player)?.talking &&
@@ -621,7 +646,13 @@ export class GameUI {
     }
     if (k === 'r' && this.context().gameOver) {
       handled();
-      this.actions.restart();
+      try {
+        if (this.actions.saves.activeSlot() !== null)
+          this.actions.saves.load(this.actions.saves.activeSlot()!);
+        else this.actions.restart();
+      } catch (error) {
+        this.toast(error instanceof Error ? error.message : '无法读取存档');
+      }
       return;
     }
     if (this.helpOpen || !this.running || this.menuOpen) {
@@ -726,6 +757,11 @@ export class GameUI {
     }
   }
   update(ctx: Ctx, dt: number, fps: number): void {
+    const saveStatus = this.actions.saves.status(),
+      indicator = this.q('#av-save-indicator');
+    if (indicator.textContent !== saveStatus)
+      indicator.textContent = saveStatus;
+    this.q('.av-preview strong').textContent = ctx.progress.name;
     this.updateMageHUD(ctx);
     this.updateJournal(ctx);
     const p = ctx.s.player.get(ctx.player)!,

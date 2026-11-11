@@ -1,7 +1,7 @@
 import { TAG } from '../components';
 import type { ItemId } from '../items';
 import { INVENTORY } from '../items';
-import { selectedItem } from '../inventory';
+import { selectedItem, type EquipmentInstance } from '../inventory';
 import type { Ctx } from './context';
 
 export function spawnDrop(
@@ -11,6 +11,7 @@ export function spawnDrop(
   kind: ItemId,
   count = 1,
   delay = 0,
+  instance?: EquipmentInstance,
 ): number {
   const id = ctx.world.createAt([TAG.PICKUP], x, y);
   ctx.s.pickup.set(id, {
@@ -18,6 +19,7 @@ export function spawnDrop(
     count,
     bob: ctx.world.rng() * Math.PI * 2,
     ignoreUntil: ctx.world.time + delay,
+    ...(instance ? { instance } : {}),
   });
   ctx.s.look.set(id, {
     family: 'pickup',
@@ -44,7 +46,7 @@ export function dropSelected(ctx: Ctx): void {
     if (ctx.level.blocked(point.x, point.y, 4)) break;
     end = point;
   }
-  spawnDrop(ctx, end.x, end.y, item.id, 1, INVENTORY.dropDelay);
+  spawnDrop(ctx, end.x, end.y, item.id, 1, INVENTORY.dropDelay, item.instance);
   if (--item.count === 0) inv.slots[inv.selected] = null;
   inv.revision++;
 }

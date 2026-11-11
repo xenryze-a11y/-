@@ -9,7 +9,7 @@ import type { NpcKind } from './sanctuary-data';
 import type { ElementStaffId } from './staff-data';
 import type { MageSkillId } from './mage-data';
 import type { Store, World } from '../engine/ecs';
-import type { InventoryState } from './inventory';
+import type { InventoryState, EquipmentInstance } from './inventory';
 import type { SkillId, ItemId, AbilityId } from './items';
 import type { Vec2 } from '../engine/math';
 
@@ -144,6 +144,7 @@ export interface Pickup {
   ignoreUntil?: number;
   fullNotice?: number;
   bob: number;
+  instance?: EquipmentInstance;
 }
 
 export interface Summon {

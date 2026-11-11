@@ -9,12 +9,20 @@ import { SANCTUARY, NPCS } from './sanctuary-data';
 import { GROVE } from './mage-data';
 import { spawnDrop } from './systems/loot';
 import { CFG } from './data';
+import {
+  createProgress,
+  ensureEquipmentInstances,
+  type AdventureProgress,
+  type RunMode,
+} from './adventure';
+import { syncEquipment } from './inventory';
 
 export interface Scene {
   world: World;
   s: Stores;
   level: Level;
   player: Entity;
+  progress: AdventureProgress;
 }
 
 function solidAt(level: Level, x: number, y: number): boolean {
@@ -38,7 +46,11 @@ function findSpot(level: Level, rng: () => number, minFromSpawn = 0): Vec2 {
   return { x: level.spawn.x + 200, y: level.spawn.y };
 }
 
-export function buildScene(seed = CFG.seed): Scene {
+export function buildScene(
+  seed = CFG.seed,
+  mode: RunMode = 'trial',
+  name = '灰烬旅人',
+): Scene {
   const world = new World((seed ^ 0x5bf03635) >>> 0);
   const s = createStores(world);
   const level = createGroveLevel(seed);
@@ -94,7 +106,7 @@ export function buildScene(seed = CFG.seed): Scene {
     level: 1,
     xp: 0,
   });
-  s.inventory.set(player, createInventory());
+  s.inventory.set(player, createInventory(mode));
   s.blade.set(player, {
     schools: {
       scythe: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },
@@ -363,5 +375,21 @@ export function buildScene(seed = CFG.seed): Scene {
       y = GROVE.altar.y + dy;
     if (!level.blocked(x, y, 12)) addMob('shamble', x, y);
   }
-  return { world, s, level, player };
+  const scene = {
+    world,
+    s,
+    level,
+    player,
+    progress: createProgress(seed, mode, name),
+  };
+  if (mode === 'adventure') {
+    for (const school of Object.values(s.mage.get(player)!.schools))
+      school.unlocked = false;
+    s.mage.get(player)!.schools.ember.unlocked = true;
+    for (const school of Object.values(s.blade.get(player)!.schools))
+      school.unlocked = false;
+  }
+  syncEquipment(scene);
+  ensureEquipmentInstances(scene);
+  return scene;
 }

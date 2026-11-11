@@ -35,6 +35,15 @@ export interface Blocker {
   y: number;
   r: number;
 }
+export interface LevelSnapshot {
+  w: number;
+  h: number;
+  tiles: number[];
+  southWalls: number[];
+  spawn: Vec2;
+  blockers: Blocker[];
+  revision: number;
+}
 
 export class Level {
   readonly tiles: Uint8Array;
@@ -56,6 +65,26 @@ export class Level {
 
   get pixelW(): number {
     return this.w * TILE;
+  }
+  snapshot(): LevelSnapshot {
+    return {
+      w: this.w,
+      h: this.h,
+      tiles: [...this.tiles],
+      southWalls: [...this.southWalls],
+      spawn: { ...this.spawn },
+      blockers: this.blockers.map((b) => ({ ...b })),
+      revision: this.revision,
+    };
+  }
+  static restore(data: LevelSnapshot): Level {
+    const level = new Level(data.w, data.h);
+    level.tiles.set(data.tiles);
+    level.southWalls.set(data.southWalls);
+    Object.assign(level.spawn, data.spawn);
+    level.blockers.push(...data.blockers.map((b) => ({ ...b })));
+    level.revision = data.revision;
+    return level;
   }
   get pixelH(): number {
     return this.h * TILE;

@@ -327,6 +327,19 @@ export function castBladeAbility(
 export function updateBlades(ctx: Ctx, dt: number): void {
   const state = ctx.s.blade.get(ctx.player)!,
     at = ctx.world.pos(ctx.player);
+  const inv = ctx.s.inventory.get(ctx.player)!;
+  for (const weapon of ['scythe', 'greatsword'] as const)
+    if (
+      !state.schools[weapon].unlocked &&
+      (inv.slots.some((item) => item?.id === weapon) ||
+        inv.cursor?.id === weapon)
+    ) {
+      state.schools[weapon].unlocked = true;
+      notice(
+        ctx,
+        '获得' + COMBAT_PROFESSIONS[weapon].name + ' · 解锁 Q / F / R',
+      );
+    }
   state.waveSwingLeft = Math.max(0, state.waveSwingLeft - dt);
   if (state.waveLeft > 0) {
     state.waveTick -= dt;

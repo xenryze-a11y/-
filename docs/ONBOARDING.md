@@ -13,7 +13,7 @@ npm run dev
 
 打开 `http://127.0.0.1:5173`。看到一片中世纪地图、模块化方块旅人、几只亡者 = 成功。
 
-素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，G 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「重新启程」重置背包与地图。
+素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，G 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「冒险存档」创建/继续正式角色，自动保存；「全武器试用」「祭坛试用」单独重开试用。存档实现见 [SAVES.md](SAVES.md)，后续顺序见 [ROADMAP.md](ROADMAP.md)。
 
 ## 1. 改一个数值（30 秒）
 
@@ -55,7 +55,7 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 
 - 改了渲染 / 动画 / 贴图 → **必须打开画面看**，编译通过不代表画对了。
 - 控制台不该有 `[atlas] 缺贴图 xxx` 或红色异常。
-- 手感类改动按 `R` 重开一局再看（地图种子会换，但数值立刻生效）。
+- 手感类改动从菜单进入全武器试用；冒险死亡后 R 读取最近存档，试用死亡后 R 重开。
 
 ## 常见任务速查
 
