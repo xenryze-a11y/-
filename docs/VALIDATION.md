@@ -144,3 +144,20 @@ Chromium / Playwright 在生产预览实际检查：
 - 全新隔离断网单文件flameArtReady / sanctuaryArtReady均true，实际触屏同样的技能按钮生成5波，HTTP(S)请求0、页面异常0。
 
 新实机截图：sacred-tree.png、herald-generated.png、priest-generated.png、flame-five-waves.png、flame-cleaves.png、flame-inferno.png。原稿 / 强像素处理 / 帧布局见assets/README.md，决策见D36–D38。
+
+
+## 圣域整体生图重建、五次自动挥浪与7秒双倍生命
+
+类型检查、71项模拟回归、普通生产构建、单文件构建及导出通过。新增 / 扩展覆盖：五次0.16秒挥击各配一波（间隔0.18秒）、挥击期间F与普攻不截断动作、初始方向锁定；7秒当前 / 最大生命同时翻倍、刷新不叠乘、到期按比例缩回、期间升级保留完整基础成长、零血不因到期复活，原增伤 / 减伤仍生效。
+
+最终生产预览Chromium / Playwright实际检查：
+
+- rebuiltSanctumReady=true，教堂外观 / 内地面 / 四家具、神树 / 祭坛、四种地面、根床 / 花石 / 镶嵌15帧仍共享一个TextureSource。切片脚本验证矩形无重叠；神树和祭坛视图只有主Sprite，没有旧通用椭圆阴影，树根锚点350/352保持不变；旧树脚下金色椭圆环也删除。
+- 逐次打开画面确认俯视石板 / 苔土 / 朝圣路、树根接地、广场太阳纹与低花石、新教堂外观及家具。教堂全景仅为调试截图临时拉远，游戏镜头仍桌面2 / 窄屏1.75。两位NPC继续使用四帧生成站立图。
+- 实际按W从南门入内、S退回门外、再S从北门进入；内部roof.alpha<.06，外面立即1且神父视图隐藏；圣使和神父都能实际C打开对话。对话0.3秒全部组件 / 世界时间JSON冻结。
+- 实际装备炎剑，R将受伤生命80/120变为160/240，技能时间从7秒推进；Q实际产生5个独立波、waveSwingIndex最终4，波Sprite.scale=1.3、判定radius56。中途开背包0.35秒全部组件 / 世界时间JSON不变，关包继续完成。大招自然到期恢复80/120，没有额外治疗。
+- 身后火焰z1、头部z20、前缘z30，前缘帧在0–85行完全透明，实际头脸可见。表现sync / renderer.sync前后全部组件、位置、alive与世界时间JSON一致。
+- 390×844触屏施放R后真实最大生命240，Q自动完成五次挥浪并截图确认头脸；844×390无横向溢出，背包窗口仍700×374.39、bottom约382.20，原小圆键和三技能布局保留。页面异常0。
+- 最终独立断网单文件能解码新圣域图，真实施放7秒炎躯与5波；ready=true、生命上限240、波数5，HTTP(S)请求0、页面异常0。
+
+新 / 更新实机截图：sacred-tree.png、sanctum-plaza.png、cathedral-exterior.png（调试全景）、cathedral-interior.png、flame-inferno.png、flame-five-waves.png、inferno-mobile.png。新原稿和处理规范见assets/README.md，取舍见D39–D41。

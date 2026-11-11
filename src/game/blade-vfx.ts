@@ -85,7 +85,7 @@ export class BladeVfx {
   private readonly impacts: Sprite[] = [];
   private readonly orbiters: Sprite[] = [];
   private readonly fireSlashes: Sprite[] = [];
-  private readonly inferno = new Sprite();
+  private infernoActive = false;
   private readonly comboGhosts: Sprite[] = [];
   private bursts: Burst[] = [];
   private particles: Particle[] = [];
@@ -131,10 +131,6 @@ export class BladeVfx {
       this.sigils.push({ id: 0, root, circle, cracks });
     }
     airLayer.addChild(this.air);
-    this.inferno.texture = atlas.get('bladeInferno_0');
-    this.inferno.anchor.set(0.5, 0.78);
-    this.inferno.visible = false;
-    airLayer.addChild(this.inferno);
     for (let i = 0; i < 6; i++) {
       const s = new Sprite(atlas.get('bladeFlameSlash_0'));
       s.anchor.set(0.5);
@@ -174,7 +170,7 @@ export class BladeVfx {
       groupSigils: this.groupSigils.filter((s) => s.root.visible).length,
       impacts: this.impacts.filter((s) => s.visible).length,
       fireSlashes: this.fireSlashes.filter((s) => s.visible).length,
-      inferno: this.inferno.visible ? 1 : 0,
+      inferno: this.infernoActive ? 1 : 0,
     };
   }
   private particle(p: Particle): void {
@@ -298,15 +294,7 @@ export class BladeVfx {
       slot.cracks.rotation = id * 2.399;
       slot.cracks.visible = r.age >= r.windup - 0.1;
     });
-    this.inferno.visible = state.infernoLeft > 0;
-    if (this.inferno.visible) {
-      this.inferno.texture = this.atlas.get(
-        'bladeInferno_' + (Math.floor(t * 8) % 3),
-      );
-      this.inferno.position.set(at.x, at.y + 2);
-      this.inferno.scale.set(0.96);
-      this.inferno.alpha = Math.min(0.9, state.infernoLeft * 2);
-    }
+    this.infernoActive = state.infernoLeft > 0;
     const alive = new Set<number>();
     scene.s.flameWave.forEach((id, w) => {
       if (scene.world.isPendingDeath(id)) return;
@@ -439,7 +427,7 @@ export class BladeVfx {
       slot.root.visible = false;
     }
     this.stormRoot.visible = false;
-    this.inferno.visible = false;
+    this.infernoActive = false;
     this.fireSlashes.forEach((s) => (s.visible = false));
     this.groupSigils.forEach((s) => (s.root.visible = false));
     this.impacts.forEach((s) => (s.visible = false));

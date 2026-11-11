@@ -38,7 +38,12 @@ export function attackBlade(ctx: Ctx, id: BladeId): void {
   const p = ctx.s.player.get(ctx.player)!,
     state = ctx.s.blade.get(ctx.player)!,
     def = BLADES[id];
-  if (p.atkCd > 0 || state.comboLeft > 0) return;
+  if (
+    p.atkCd > 0 ||
+    state.comboLeft > 0 ||
+    (id === 'greatsword' && (state.waveLeft > 0 || state.waveSwingLeft > 0))
+  )
+    return;
   const angle = ctx.s.facing.get(ctx.player)!.angle,
     at = ctx.world.pos(ctx.player),
     damage = def.damage * (id === 'greatsword' ? damageScale(ctx) : 1);
@@ -193,6 +198,16 @@ function spawnFlameWave(ctx: Ctx, angle: number, multiplier: number): void {
     showHealth: false,
     staticSprite: 'bladeFlameWave_0',
   });
+  const state = ctx.s.blade.get(ctx.player)!,
+    p = ctx.s.player.get(ctx.player)!;
+  state.waveSwingLeft = M.wave.swingDuration;
+  state.waveSwingIndex = M.wave.count - state.waveLeft - 1;
+  if (selectedItem(ctx)?.id === 'greatsword') {
+    p.attackAnim = M.wave.swingDuration;
+    p.swingAngle = angle;
+    p.castAnim = 0;
+  }
+  bladeEvent(ctx, 'fireSlash', at, angle, BLADES.greatsword.range);
   bladeEvent(ctx, 'waveCast', at, angle, 50);
 }
 export function castBladeAbility(
@@ -222,7 +237,12 @@ export function castBladeAbility(
     (weapon === 'greatsword' &&
       ability === 'field' &&
       (state.waveLeft > 0 ||
-        ctx.s.flameWave.length + M.wave.count > M.maxWaves))
+        state.waveSwingLeft > 0 ||
+        state.comboLeft > 0 ||
+        ctx.s.flameWave.length + M.wave.count > M.maxWaves)) ||
+    (weapon === 'greatsword' &&
+      ability === 'wave' &&
+      (state.waveLeft > 0 || state.waveSwingLeft > 0 || state.comboLeft > 0))
   ) {
     notice(ctx, '法术正在作用，请稍候');
     return;
@@ -293,6 +313,12 @@ export function castBladeAbility(
     state.comboAngle = angle;
     state.comboMultiplier = damageScale(ctx);
   } else {
+    if (!state.infernoVitality) {
+      const hp = ctx.s.health.get(ctx.player)!;
+      hp.max *= M.inferno.vitalityMultiplier;
+      hp.hp *= M.inferno.vitalityMultiplier;
+      state.infernoVitality = true;
+    }
     state.infernoLeft = M.inferno.life;
     state.infernoTick = 0;
     bladeEvent(ctx, 'infernoCast', at, angle, 55);
@@ -301,6 +327,7 @@ export function castBladeAbility(
 export function updateBlades(ctx: Ctx, dt: number): void {
   const state = ctx.s.blade.get(ctx.player)!,
     at = ctx.world.pos(ctx.player);
+  state.waveSwingLeft = Math.max(0, state.waveSwingLeft - dt);
   if (state.waveLeft > 0) {
     state.waveTick -= dt;
     while (state.waveTick <= 0 && state.waveLeft > 0) {
@@ -327,6 +354,13 @@ export function updateBlades(ctx: Ctx, dt: number): void {
       state.infernoTick += M.inferno.period;
       pulse(ctx, at, M.inferno.radius, M.inferno.damage, true);
     }
+  }
+  // 按剩余生命比例缩回，不能在到期时恢复旧血量或因换武器重复翻倍。
+  if (state.infernoVitality && state.infernoLeft <= 0) {
+    const hp = ctx.s.health.get(ctx.player)!;
+    hp.max /= M.inferno.vitalityMultiplier;
+    hp.hp = Math.min(hp.max, Math.max(0, hp.hp / M.inferno.vitalityMultiplier));
+    state.infernoVitality = false;
   }
   if (state.comboLeft > 0) {
     const active = Math.min(dt, state.comboLeft);

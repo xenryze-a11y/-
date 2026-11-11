@@ -108,7 +108,8 @@ export const COMBAT_PROFESSIONS: Record<CombatProfessionId, StaffProfession> = {
         key: 'Q',
         cost: 18,
         cooldown: 5,
-        description: '连续挥出五波火焰浪潮，穿透敌群，每波遇墙停止并附加灼烧。',
+        description:
+          '自动挥剑五次，每次挥出一波火焰浪潮，穿透敌群，每波遇墙停止并附加灼烧。',
       },
       wave: {
         name: '三叠流焰斩',
@@ -126,7 +127,7 @@ export const COMBAT_PROFESSIONS: Record<CombatProfessionId, StaffProfession> = {
         cost: 30,
         cooldown: 17,
         description:
-          '火焰护体六秒，持续灼烧近敌，大剑伤害提升35%，受到伤害减少20%。',
+          '火焰护体七秒，当前生命与上限翻倍，持续灼烧近敌，大剑增伤35%、减伤20%。',
       },
     },
   },
@@ -165,7 +166,16 @@ export const BLADE_MAGIC = {
     groupLife: 3.4,
     slow: 1.4,
   },
-  wave: { speed: 270, life: 1, radius: 42, damage: 30, count: 5, period: 0.18 },
+  wave: {
+    speed: 270,
+    life: 1,
+    radius: 56,
+    damage: 30,
+    count: 5,
+    period: 0.18,
+    swingDuration: 0.16,
+    visualScale: 1.3,
+  },
   combo: {
     periods: [0.04, 0.31, 0.36],
     damage: [23, 28, 42],
@@ -175,7 +185,8 @@ export const BLADE_MAGIC = {
     life: 1.05,
   },
   inferno: {
-    life: 6,
+    life: 7,
+    vitalityMultiplier: 2,
     radius: 55,
     period: 0.45,
     damage: 6,

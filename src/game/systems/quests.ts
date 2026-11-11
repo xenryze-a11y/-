@@ -1,4 +1,5 @@
 /** NPC 对话和任务是纯模拟命令；UI 暂停与文字仅投影这些状态。 */
+import { BLADE_MAGIC } from '../weapon-data';
 import { dist } from '../../engine/math';
 import { addItem, notice } from '../inventory';
 import { NPCS, SANCTUARY, inCathedral } from '../sanctuary-data';
@@ -19,8 +20,13 @@ export function grantXp(ctx: Ctx, amount: number): void {
     j.level++;
     const hp = ctx.s.health.get(ctx.player)!,
       p = ctx.s.player.get(ctx.player)!;
-    hp.max += SANCTUARY.levelHp;
-    hp.hp = Math.min(hp.max, hp.hp + SANCTUARY.levelHp);
+    const growth =
+      SANCTUARY.levelHp *
+      (ctx.s.blade.get(ctx.player)?.infernoVitality
+        ? BLADE_MAGIC.inferno.vitalityMultiplier
+        : 1);
+    hp.max += growth;
+    hp.hp = Math.min(hp.max, hp.hp + growth);
     p.maxMana += SANCTUARY.levelMana;
     p.mana = Math.min(p.maxMana, p.mana + SANCTUARY.levelMana);
     notice(ctx, `旅人等级 ${j.level} · 生命与法力上限提升`);

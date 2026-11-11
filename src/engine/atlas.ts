@@ -1,3 +1,4 @@
+import { applyRebuiltSanctumArt } from '../game/sanctum-rebuilt-art';
 /**
  * 图集加载与切帧。对应 goengine 的 backend/atlas.go + game/art/registry.go。
  *
@@ -78,6 +79,7 @@ export class TextureAtlas {
   readonly scytheVfxReady: boolean;
   readonly flameArtReady: boolean;
   readonly sanctuaryArtReady: boolean;
+  readonly rebuiltSanctumReady: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
@@ -92,6 +94,7 @@ export class TextureAtlas {
     scytheVfxReady = false,
     flameArtReady = false,
     sanctuaryArtReady = false,
+    rebuiltSanctumReady = false,
   ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
@@ -104,6 +107,7 @@ export class TextureAtlas {
     this.scytheVfxReady = scytheVfxReady;
     this.flameArtReady = flameArtReady;
     this.sanctuaryArtReady = sanctuaryArtReady;
+    this.rebuiltSanctumReady = rebuiltSanctumReady;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
@@ -130,6 +134,7 @@ export class TextureAtlas {
     const scytheReady = await applyGeneratedScytheVfx(built);
     const flameReady = await applyGeneratedFlameArt(built);
     const sanctuaryReady = await applyGeneratedSanctuaryArt(built);
+    const rebuiltReady = await applyRebuiltSanctumArt(built);
     if (
       external &&
       Object.entries(built.frames).every(
@@ -157,6 +162,7 @@ export class TextureAtlas {
       scytheReady,
       flameReady,
       sanctuaryReady,
+      rebuiltReady,
     );
   }
 

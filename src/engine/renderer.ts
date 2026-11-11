@@ -1,3 +1,5 @@
+import { sanctumGroundFrame, SANCTUM_GARDENS } from '../game/sanctum-ground';
+import { GROVE } from '../game/mage-data';
 /**
  * ECS → Pixi 显示对象。对应 goengine 的 game/scene（只读 World，从不写回）。
  *
@@ -8,7 +10,7 @@
  * 绝不写回 ECS —— 这条隔离是以后接服务端权威 / 回放的前提。
  */
 import { Container, Sprite, Texture, Text } from 'pixi.js';
-import { riftFrame } from '../game/weapon-data';
+import { riftFrame, BLADE_MAGIC } from '../game/weapon-data';
 import { BlockAvatar } from '../game/block-avatar';
 import { SanctuaryView } from '../game/sanctuary-view';
 import {
@@ -133,7 +135,8 @@ export class WorldView {
     for (let y = 0; y < level.h; y++)
       for (let x = 0; x < level.w; x++) {
         const tile = level.at(x, y),
-          name = TILE_SPRITE[tile === Tile.WALL ? Tile.STONE : tile],
+          sanctum = sanctumGroundFrame(x, y, tile),
+          name = sanctum || TILE_SPRITE[tile === Tile.WALL ? Tile.STONE : tile],
           f = this.atlas.frames[name];
         g.drawImage(
           this.atlas.canvas,
@@ -146,6 +149,7 @@ export class WorldView {
           32,
           32,
         );
+        if (sanctum) continue;
         // Tile-local variations avoid a repeated carpet without introducing texture seams.
         const rng = makeRng(x * 73471 + y * 3571 + CFG.seed);
         if (tile === Tile.GRASS) {
@@ -205,6 +209,24 @@ export class WorldView {
             }
         }
       }
+    const decal = (name: string, x: number, y: number) => {
+      const f = this.atlas.frames[name];
+      g.drawImage(
+        this.atlas.canvas,
+        f.x,
+        f.y,
+        f.w,
+        f.h,
+        Math.round(x - f.w / 2),
+        Math.round(y - f.h / 2),
+        f.w,
+        f.h,
+      );
+    };
+    decal('groundSacredRoots', GROVE.tree.x, GROVE.tree.y - 2);
+    decal('groundSacredMosaic', GROVE.altar.x, GROVE.altar.y + 115);
+    for (const at of SANCTUM_GARDENS)
+      decal('groundSacredGarden', at.x, at.y - 12);
     this.groundSprite = new Sprite(Texture.from(c, true));
     this.groundSprite.texture.source.style.scaleMode = 'nearest';
     this.groundLayer.addChildAt(this.groundSprite, 0);
@@ -386,7 +408,12 @@ export class WorldView {
         shadow.alpha = 0.6;
         root.addChild(shadow);
       }
-      if (look.family === 'prop') {
+      if (
+        look.family === 'prop' &&
+        !['propAncientTree', 'propAltar', 'propSanctuaryGarden'].includes(
+          look.staticSprite || '',
+        )
+      ) {
         const shadow = new Sprite(this.atlas.get('partPropShadow'));
         shadow.anchor.set(0.5);
         shadow.position.set(4, 4);
@@ -661,6 +688,7 @@ export class WorldView {
       );
       sprite.anchor.set(0.5);
       sprite.y = -10;
+      sprite.scale.set(BLADE_MAGIC.wave.visualScale);
       sprite.rotation = Math.atan2(wave.vy, wave.vx);
       return;
     }

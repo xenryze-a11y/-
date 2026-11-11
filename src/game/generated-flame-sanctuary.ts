@@ -45,8 +45,24 @@ async function applySheet(
     return false;
   }
 }
-export const applyGeneratedFlameArt = (atlas: BuiltAtlas) =>
-  applySheet(atlas, flameURL, flameJSON, 12);
+export async function applyGeneratedFlameArt(
+  atlas: BuiltAtlas,
+): Promise<boolean> {
+  const ready = await applySheet(atlas, flameURL, flameJSON, 12);
+  if (!ready) return false;
+  const g = atlas.canvas.getContext('2d')!;
+  for (let i = 0; i < 3; i++)
+    for (const part of ['Back', 'Front']) {
+      const f = atlas.frames['bladeInferno_' + i],
+        t = atlas.frames['bladeInferno' + part + '_' + i],
+        sy = part === 'Back' ? 0 : 86,
+        h = part === 'Back' ? 86 : 42;
+      if (!t || t.w !== 128 || t.h !== 128) return false;
+      g.clearRect(t.x, t.y, t.w, t.h);
+      g.drawImage(atlas.canvas, f.x, f.y + sy, 128, h, t.x, t.y + sy, 128, h);
+    }
+  return true;
+}
 export const applyGeneratedSanctuaryArt = (atlas: BuiltAtlas) =>
   applySheet(atlas, sanctuaryURL, sanctuaryJSON, 10, {
     npcHerald: 'npcHerald_0',
