@@ -21,6 +21,7 @@ import { updateAI } from './game/systems/ai';
 import { updateProjectiles } from './game/systems/projectile';
 import { updateFields, castSelected } from './game/systems/magic';
 import { applyQuestCommand, type QuestCommand } from './game/systems/quests';
+import { updateBlades } from './game/systems/blades';
 import { updateStaffArts } from './game/systems/staff-arts';
 import { castStaffAbility } from './game/systems/profession';
 import { updateMage, castMage } from './game/systems/mage';
@@ -168,6 +169,7 @@ async function boot(): Promise<void> {
         updateFields(ctx, _fixed);
         updateMage(ctx, _fixed);
         updateStaffArts(ctx, _fixed);
+        updateBlades(ctx, _fixed);
         updateSummons(ctx, _fixed);
         updateRules(ctx);
         ctx.world.flush();

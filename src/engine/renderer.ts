@@ -8,6 +8,7 @@
  * 绝不写回 ECS —— 这条隔离是以后接服务端权威 / 回放的前提。
  */
 import { Container, Sprite, Texture, Text } from 'pixi.js';
+import { riftFrame } from '../game/weapon-data';
 import { BlockAvatar } from '../game/block-avatar';
 import { SanctuaryView } from '../game/sanctuary-view';
 import {
@@ -641,6 +642,28 @@ export class WorldView {
     scene: Scene,
   ): void {
     const { s } = scene;
+    const rift = s.rift.get(e);
+    if (rift) {
+      const frame = riftFrame(rift.kind, rift.age, rift.windup);
+      sprite.visible = frame >= 0;
+      sprite.texture = this.atlas.get(
+        (rift.kind === 'claw' ? 'demonClaw_' : 'demonSpike_') +
+          Math.max(0, frame),
+      );
+      sprite.anchor.set(0.5, 1);
+      sprite.y = 2;
+      return;
+    }
+    const wave = s.flameWave.get(e);
+    if (wave) {
+      sprite.texture = this.atlas.get(
+        'bladeFlameWave_' + (Math.floor(wave.age * 16) % 6),
+      );
+      sprite.anchor.set(0.5);
+      sprite.y = -10;
+      sprite.rotation = Math.atan2(wave.vy, wave.vx);
+      return;
+    }
     const npc = s.npc.get(e);
     if (npc) {
       sprite.anchor.set(0.5, npc.kind === 'herald' ? 94 / 112 : 60 / 64);

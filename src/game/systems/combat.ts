@@ -4,6 +4,7 @@
  */
 import { angleDiff, dist, fromAngle, type Vec2 } from '../../engine/math';
 import { CFG } from '../data';
+import { BLADE_MAGIC } from '../weapon-data';
 import { armorReduction } from '../armor';
 import { grantXp } from './quests';
 import { SANCTUARY } from '../sanctuary-data';
@@ -27,6 +28,8 @@ export function applyDamage(
   if ((pl && pl.invuln > 0) || (dodge && dodge.invuln > 0)) return;
 
   if (pl) {
+    if ((ctx.s.blade.get(target)?.infernoLeft || 0) > 0)
+      raw *= 1 - BLADE_MAGIC.inferno.reduction;
     raw = Math.max(1, raw - armorReduction(ctx.s.equip.get(target)));
     if (pl.shield > 0 && pl.shieldHp > 0) {
       const absorbed = Math.min(raw, pl.shieldHp);

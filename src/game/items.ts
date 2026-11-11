@@ -5,6 +5,9 @@ export type ArmorItemId =
   | `${'iron' | 'leather' | 'sanctum'}_${'head' | 'chest' | 'legs'}`
   | 'sanctum_boots';
 export type ItemId =
+  | 'scythe'
+  | 'sabre'
+  | 'greatsword'
   | ArmorItemId
   | SkillId
   | 'basketball'
@@ -22,6 +25,9 @@ export type ItemId =
 export interface ItemDefinition {
   name: string;
   kind:
+    | 'scythe'
+    | 'sabre'
+    | 'greatsword'
     | 'staff'
     | 'basketball'
     | 'sword'
@@ -144,6 +150,27 @@ ARMOR_ITEMS.sanctum_boots = {
 };
 export const ITEMS: Record<ItemId, ItemDefinition> = {
   ...ARMOR_ITEMS,
+  scythe: {
+    name: '魔域镰刀',
+    kind: 'scythe',
+    stack: 1,
+    color: '#b097df',
+    desc: '异瞳镰刃与深海邪纹。\nQ 魔旋风暴 · F 深渊魔爪 · R 魔域地刺。',
+  },
+  sabre: {
+    name: '月弧弯刃',
+    kind: 'sabre',
+    stack: 1,
+    color: '#c1ded4',
+    desc: '轻盈的弯曲长刃，快速近战连击。\n没有主动技能，普攻不消耗法力。',
+  },
+  greatsword: {
+    name: '烬皇火焰大剑',
+    kind: 'greatsword',
+    stack: 1,
+    color: '#ffb06b',
+    desc: '重刃内流淌炽热熔焰。\nQ 焰火浪潮 · F 三叠流焰斩 · R 炎躯加身。',
+  },
   ember: {
     name: '余烬法杖',
     kind: 'staff',

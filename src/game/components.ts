@@ -3,6 +3,7 @@
  * ⚠️ 表现层的走路相位 / 混合 / 显示对象 **不放这里**，见 engine/renderer.ts 的 AvatarView。
  * 那条隔离保证「有没有渲染」不影响模拟结果，也是以后接服务端权威的前提。
  */
+import type { BladeProfessionId } from './weapon-data';
 import type { ArmorMat } from './armor';
 import type { NpcKind } from './sanctuary-data';
 import type { ElementStaffId } from './staff-data';
@@ -25,6 +26,10 @@ export const TAG = {
 } as const;
 
 export const C = {
+  BLADE: 'blade',
+  RIFT: 'rift',
+  RIFT_GROUP: 'riftGroup',
+  FLAME_WAVE: 'flameWave',
   NPC: 'npc',
   JOURNAL: 'journal',
   RADIUS: 'radius',
@@ -60,7 +65,13 @@ export interface Health {
 export interface Facing {
   angle: number;
 }
-export type Weapon = 'sword' | 'staff' | 'basketball';
+export type Weapon =
+  | 'sword'
+  | 'staff'
+  | 'basketball'
+  | 'scythe'
+  | 'sabre'
+  | 'greatsword';
 
 export interface Player {
   weapon: Weapon;
@@ -263,7 +274,51 @@ export interface Journal {
   level: number;
   xp: number;
 }
+export interface BladeState {
+  schools: Record<BladeProfessionId, ProfessionState>;
+  stormLeft: number;
+  stormTick: number;
+  stormAngle: number;
+  infernoLeft: number;
+  infernoTick: number;
+  comboLeft: number;
+  comboTick: number;
+  comboPhase: number;
+  comboAngle: number;
+  comboMultiplier: number;
+}
+export interface RiftStrike {
+  owner: number;
+  kind: 'claw' | 'spike';
+  age: number;
+  windup: number;
+  strikeAt: number;
+  life: number;
+  radius: number;
+  damage: number;
+  struck: boolean;
+  group: number;
+}
+export interface RiftGroup {
+  life: number;
+  hit: number[];
+  origin: Vec2;
+}
+export interface FlameWave {
+  owner: number;
+  vx: number;
+  vy: number;
+  life: number;
+  age: number;
+  radius: number;
+  damage: number;
+  hit: number[];
+}
 export interface Stores {
+  blade: Store<BladeState>;
+  rift: Store<RiftStrike>;
+  riftGroup: Store<RiftGroup>;
+  flameWave: Store<FlameWave>;
   npc: Store<Npc>;
   journal: Store<Journal>;
   radius: Store<Radius>;
@@ -289,6 +344,10 @@ export interface Stores {
 
 export function createStores(w: World): Stores {
   return {
+    blade: w.register<BladeState>(C.BLADE),
+    rift: w.register<RiftStrike>(C.RIFT),
+    riftGroup: w.register<RiftGroup>(C.RIFT_GROUP),
+    flameWave: w.register<FlameWave>(C.FLAME_WAVE),
     npc: w.register<Npc>(C.NPC),
     journal: w.register<Journal>(C.JOURNAL),
     radius: w.register<Radius>(C.RADIUS),

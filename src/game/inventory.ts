@@ -1,4 +1,5 @@
 /** 背包属于模拟数据。界面只发命令，在组装层统一调用这些规则。 */
+import { isBlade } from './weapon-data';
 import { ARMOR_SLOTS } from './armor';
 import { ITEMS, INVENTORY, isSkill, type ItemId } from './items';
 import type { Ctx } from './systems/context';
@@ -17,6 +18,7 @@ export interface InventoryState {
   revision: number;
 }
 export type InventoryCommand =
+  | { type: 'equip'; id: ItemId }
   | { type: 'select'; index: number }
   | { type: 'slot'; index: number; right: boolean; shift: boolean }
   | { type: 'craft' };
@@ -49,6 +51,9 @@ export function createInventory(): InventoryState {
   slots[15] = { id: 'iron_head', count: 1 };
   slots[16] = { id: 'iron_chest', count: 1 };
   slots[17] = { id: 'iron_legs', count: 1 };
+  slots[18] = { id: 'scythe', count: 1 };
+  slots[19] = { id: 'sabre', count: 1 };
+  slots[20] = { id: 'greatsword', count: 1 };
   return {
     slots,
     craft: [null, null, null, null],
@@ -134,7 +139,8 @@ export function syncEquipment(ctx: Ctx): void {
   if (selected && isSkill(selected.id)) {
     p.weapon = 'staff';
     p.skill = selected.id;
-  } else if (selected?.id === 'sword') p.weapon = 'sword';
+  } else if (selected && isBlade(selected.id)) p.weapon = selected.id;
+  else if (selected?.id === 'sword') p.weapon = 'sword';
   else if (selected?.id === 'basketball') p.weapon = 'basketball';
   eq.shoes =
     inv.boots?.id === 'sanctum_boots'
@@ -167,7 +173,33 @@ export function returnCursor(ctx: Ctx): boolean {
 export function applyInventoryCommand(ctx: Ctx, cmd: InventoryCommand): void {
   if (ctx.gameOver) return;
   const inv = ctx.s.inventory.get(ctx.player)!;
-  if (cmd.type === 'select') {
+  if (cmd.type === 'equip') {
+    if (inv.cursor) {
+      notice(ctx, '先放下手中的物品再快速装备');
+      return;
+    }
+    const index = inv.slots.findIndex((item) => item?.id === cmd.id);
+    if (
+      index < 0 ||
+      ![
+        'staff',
+        'scythe',
+        'sabre',
+        'greatsword',
+        'sword',
+        'basketball',
+      ].includes(ITEMS[cmd.id].kind)
+    )
+      return;
+    if (index < 9) inv.selected = index;
+    else {
+      const target = inv.selected;
+      [inv.slots[target], inv.slots[index]] = [
+        inv.slots[index],
+        inv.slots[target],
+      ];
+    }
+  } else if (cmd.type === 'select') {
     inv.selected =
       ((cmd.index % INVENTORY.hotbar) + INVENTORY.hotbar) % INVENTORY.hotbar;
   } else if (cmd.type === 'craft') {

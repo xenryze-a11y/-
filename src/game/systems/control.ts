@@ -19,7 +19,8 @@ export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
     vector = { x: aim.x - pos.x, y: aim.y - pos.y };
   if (
     input.aimActive ||
-    (input.down | input.pressed) & (BTN.ATTACK | BTN.CAST | BTN.ULTIMATE)
+    (input.down | input.pressed) &
+      (BTN.ATTACK | BTN.CAST | BTN.ULTIMATE | BTN.FIELD)
   ) {
     if (len(vector) > 5) f.angle = angle(vector);
   } else if (len(input.move) > 0.1) f.angle = angle(input.move);

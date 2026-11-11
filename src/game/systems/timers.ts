@@ -48,6 +48,13 @@ export function tickTimers(ctx: Ctx, dt: number): void {
         school.cooldowns[key] = dec(school.cooldowns[key]);
   });
 
+  ctx.s.blade.forEach((_id, state) => {
+    for (const school of Object.values(state.schools))
+      for (const key of Object.keys(
+        school.cooldowns,
+      ) as (keyof typeof school.cooldowns)[])
+        school.cooldowns[key] = dec(school.cooldowns[key]);
+  });
   ctx.s.mob.forEach((_e, m) => {
     m.atkCd = dec(m.atkCd);
     m.attackAnim = dec(m.attackAnim);

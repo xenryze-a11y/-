@@ -1325,3 +1325,307 @@ test('experience levels use rising thresholds and raise real maximum health and 
       .some((e) => e.kind === 'notice' && e.text?.includes('等级 3')),
   );
 });
+
+import { updateBlades, castBladeAbility } from '../src/game/systems/blades';
+import {
+  BLADE_MAGIC,
+  BLADES,
+  riftFrame,
+  type BladeId,
+} from '../src/game/weapon-data';
+const equipBlade = (c: Ctx, id: BladeId) =>
+  applyInventoryCommand(c, { type: 'equip', id });
+function bladeSteps(c: Ctx, seconds: number): void {
+  for (let i = 0; i < Math.ceil(seconds * 60); i++) {
+    tickTimers(c, 1 / 60);
+    updateBlades(c, 1 / 60);
+    c.world.flush();
+  }
+}
+test('quick weapon equip swaps with the selected hotbar slot without losing items or accepting a held cursor', () => {
+  const c = arena(),
+    before = inv(c)
+      .slots.filter(Boolean)
+      .map((i) => i!.id)
+      .sort();
+  equipBlade(c, 'scythe');
+  assert.equal(inv(c).slots[0]?.id, 'scythe');
+  assert.equal(inv(c).slots[18]?.id, 'ember');
+  assert.equal(player(c).weapon, 'scythe');
+  equipBlade(c, 'sabre');
+  assert.equal(player(c).weapon, 'sabre');
+  assert.deepEqual(
+    inv(c)
+      .slots.filter(Boolean)
+      .map((i) => i!.id)
+      .sort(),
+    before,
+  );
+  slot(c, 9);
+  const snapshot = JSON.stringify(inv(c));
+  equipBlade(c, 'greatsword');
+  assert.equal(JSON.stringify(inv(c)), snapshot);
+  assert.equal(player(c).weapon, 'sabre');
+});
+test('sabre has no Q/F/R special skills, while fast basic attacks deal real melee damage', () => {
+  const c = arena();
+  equipBlade(c, 'sabre');
+  c.s.facing.get(c.player)!.angle = 0;
+  const target = mob(c, 640, 600, 1000),
+    mana = player(c).mana;
+  for (const a of MAGE_IDS_FOR_TEST) castStaffAbility(c, a);
+  castSelected(c, true);
+  assert.equal(player(c).mana, mana);
+  assert.equal(c.s.rift.length, 0);
+  assert.equal(c.s.flameWave.length, 0);
+  assert.equal(c.s.blade.get(c.player)!.stormLeft, 0);
+  castSelected(c);
+  assert.equal(c.s.health.get(target)!.hp, 1000 - BLADES.sabre.damage);
+  assert.equal(player(c).atkCd, BLADES.sabre.cooldown);
+  castSelected(c);
+  assert.equal(c.s.health.get(target)!.hp, 981);
+});
+test('blade professions have independent cooldowns and reject insufficient mana or capped summons before spending', () => {
+  const c = arena();
+  equipBlade(c, 'scythe');
+  castStaffAbility(c, 'field');
+  const scythe = c.s.blade.get(c.player)!.schools.scythe;
+  assert.equal(scythe.cooldowns.field, 8);
+  equipBlade(c, 'greatsword');
+  assert.equal(professionState(c, 'greatsword').cooldowns.field, 0);
+  player(c).mana = 0;
+  for (const a of MAGE_IDS_FOR_TEST) castStaffAbility(c, a);
+  assert.deepEqual(professionState(c, 'greatsword').cooldowns, {
+    field: 0,
+    wave: 0,
+    barrage: 0,
+  });
+  equipBlade(c, 'scythe');
+  assert.equal(scythe.cooldowns.field, 8);
+  player(c).mana = 100;
+  for (let i = 0; i < BLADE_MAGIC.maxRifts; i++) {
+    const id = c.world.createAt([], 400, 400);
+    c.s.rift.set(id, {
+      owner: c.player,
+      kind: 'spike',
+      age: 0,
+      windup: 0.5,
+      strikeAt: 0.7,
+      life: 2,
+      radius: 25,
+      damage: 1,
+      struck: false,
+      group: 0,
+    });
+  }
+  castStaffAbility(c, 'wave');
+  assert.equal(player(c).mana, 100);
+  assert.equal(scythe.cooldowns.wave, 0);
+  castStaffAbility(c, 'barrage');
+  assert.equal(player(c).mana, 100);
+  assert.equal(scythe.cooldowns.barrage, 0);
+});
+test('scythe storm follows its owner after switching weapons and cannot deal damage across a wall', () => {
+  const c = arena();
+  equipBlade(c, 'scythe');
+  const first = mob(c, 650, 600, 1000);
+  castStaffAbility(c, 'field');
+  updateBlades(c, 1 / 60);
+  assert.equal(c.s.health.get(first)!.hp, 990);
+  equipBlade(c, 'sabre');
+  c.world.setPos(c.player, { x: 740, y: 600 });
+  const next = mob(c, 800, 600, 1000);
+  bladeSteps(c, 0.3);
+  assert.ok(c.s.health.get(next)!.hp < 1000);
+  bladeSteps(c, 4);
+  assert.equal(c.s.blade.get(c.player)!.stormLeft, 0);
+  const d = arena();
+  equipBlade(d, 'scythe');
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 20] = Tile.WALL;
+  const hidden = mob(d, 675, 600);
+  castStaffAbility(d, 'field');
+  bladeSteps(d, 2);
+  assert.equal(d.s.health.get(hidden)!.hp, 250);
+});
+test('claw begins as an unstruck magic circle, emerges before one actual grasp hit, and pulls toward the fissure', () => {
+  const c = arena();
+  equipBlade(c, 'scythe');
+  c.s.facing.get(c.player)!.angle = 0;
+  const target = mob(c, 785, 600, 1000);
+  castStaffAbility(c, 'wave');
+  assert.equal(c.s.rift.length, 1);
+  let r = c.s.rift.data[0];
+  assert.equal(r.struck, false);
+  assert.equal(riftFrame('claw', r.age, r.windup), -1);
+  bladeSteps(c, 0.49);
+  assert.equal(c.s.health.get(target)!.hp, 1000);
+  assert.equal(r.struck, false);
+  equipBlade(c, 'sabre');
+  bladeSteps(c, 0.31);
+  assert.equal(c.s.health.get(target)!.hp, 946);
+  assert.ok(c.s.mob.get(target)!.frozen! > 0);
+  assert.ok(c.world.pos(target).x < 785);
+  bladeSteps(c, 0.3);
+  assert.equal(c.s.health.get(target)!.hp, 946);
+  assert.equal(
+    c.world
+      .drain()
+      .filter((e) => e.kind === 'bladeArt' && e.ability === 'clawHit').length,
+    1,
+  );
+  bladeSteps(c, 2);
+  assert.equal(c.s.rift.length, 0);
+});
+test('claw spawn and its grasp obey wall visibility even when the target cursor lies beyond a wall', () => {
+  const c = arena();
+  equipBlade(c, 'scythe');
+  c.s.facing.get(c.player)!.angle = 0;
+  for (let y = 0; y < c.level.h; y++)
+    c.level.tiles[y * c.level.w + 20] = Tile.WALL;
+  const hidden = mob(c, 670, 600, 1000);
+  castStaffAbility(c, 'wave');
+  const point = c.world.pos(c.s.rift.owners[0]);
+  assert.ok(point.x < 640);
+  bladeSteps(c, 1.2);
+  assert.equal(c.s.health.get(hidden)!.hp, 1000);
+  assert.deepEqual(c.world.pos(hidden), { x: 670, y: 600 });
+});
+test('ground spikes form a center and four cardinal lines with per-spike circles and one hit per enemy per cast', () => {
+  const c = arena();
+  equipBlade(c, 'scythe');
+  c.s.facing.get(c.player)!.angle = 0;
+  const overlap = mob(c, 778, 600, 1000);
+  castStaffAbility(c, 'barrage');
+  assert.equal(c.s.rift.length, 17);
+  assert.equal(c.s.riftGroup.length, 1);
+  const coords = c.s.rift.owners.map((id) => c.world.pos(id));
+  for (const [x, y] of [
+    [760, 456],
+    [904, 600],
+    [760, 744],
+    [616, 600],
+  ])
+    assert.ok(
+      coords.some(
+        (p) => Math.abs(p.x - x) < 0.001 && Math.abs(p.y - y) < 0.001,
+      ),
+    );
+  assert.equal(c.s.health.get(overlap)!.hp, 1000);
+  bladeSteps(c, 1.5);
+  assert.equal(c.s.health.get(overlap)!.hp, 960);
+  assert.equal(
+    c.world
+      .drain()
+      .filter((e) => e.kind === 'bladeArt' && e.ability === 'spikeHit').length,
+    17,
+  );
+  bladeSteps(c, 3);
+  assert.equal(c.s.rift.length, 0);
+  assert.equal(c.s.riftGroup.length, 0);
+});
+test('each spike arm stops at a wall and its damage cannot leak through that wall', () => {
+  const c = arena();
+  equipBlade(c, 'scythe');
+  c.s.facing.get(c.player)!.angle = 0;
+  for (let y = 0; y < c.level.h; y++)
+    c.level.tiles[y * c.level.w + 25] = Tile.WALL;
+  const hidden = mob(c, 840, 600, 1000);
+  castStaffAbility(c, 'barrage');
+  assert.equal(c.s.rift.length, 14);
+  assert.ok(c.s.rift.owners.every((id) => c.world.pos(id).x < 800));
+  bladeSteps(c, 2);
+  assert.equal(c.s.health.get(hidden)!.hp, 1000);
+});
+test('flame wave pierces each visible enemy once, ignites targets and sweeps against walls without tunneling', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  const first = mob(c, 675, 600, 1000),
+    second = mob(c, 755, 620, 1000);
+  castStaffAbility(c, 'field');
+  bladeSteps(c, 0.7);
+  assert.equal(c.s.health.get(first)!.hp, 970);
+  assert.equal(c.s.health.get(second)!.hp, 970);
+  assert.ok(c.s.mob.get(first)!.burn! > 0);
+  bladeSteps(c, 1);
+  assert.equal(c.s.flameWave.length, 0);
+  const d = arena();
+  equipBlade(d, 'greatsword');
+  d.s.facing.get(d.player)!.angle = 0;
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 20] = Tile.WALL;
+  const hidden = mob(d, 680, 600);
+  castStaffAbility(d, 'field');
+  updateBlades(d, 1);
+  d.world.flush();
+  assert.equal(d.s.health.get(hidden)!.hp, 250);
+  assert.equal(d.s.flameWave.length, 0);
+});
+test('three flowing cleaves occur at distinct times with a locked cast direction and stronger third strike', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  const enemy = mob(c, 665, 600, 1000),
+    behind = mob(c, 550, 600, 1000);
+  castStaffAbility(c, 'wave');
+  assert.equal(c.s.health.get(enemy)!.hp, 1000);
+  bladeSteps(c, 0.1);
+  assert.equal(c.s.health.get(enemy)!.hp, 977);
+  c.s.facing.get(c.player)!.angle = Math.PI;
+  bladeSteps(c, 0.3);
+  assert.equal(c.s.health.get(enemy)!.hp, 949);
+  bladeSteps(c, 0.4);
+  assert.equal(c.s.health.get(enemy)!.hp, 907);
+  assert.equal(c.s.health.get(behind)!.hp, 1000);
+  const events = c.world
+    .drain()
+    .filter((e) => e.kind === 'bladeArt' && e.ability?.startsWith('combo'));
+  assert.deepEqual(
+    events.map((e) => e.ability),
+    ['combo0', 'combo1', 'combo2'],
+  );
+  assert.ok(events.every((e) => e.angle === 0));
+  bladeSteps(c, 1);
+  assert.equal(c.s.blade.get(c.player)!.comboLeft, 0);
+});
+test('inferno is a real six-second self buff with boosted sword damage and incoming reduction after switching', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  const enemy = mob(c, 655, 600, 1000);
+  castStaffAbility(c, 'barrage');
+  assert.equal(c.s.blade.get(c.player)!.infernoLeft, 6);
+  castSelected(c);
+  assert.equal(c.s.health.get(enemy)!.hp, 951);
+  equipBlade(c, 'sabre');
+  applyDamage(c, c.player, 20, 0);
+  assert.equal(c.s.health.get(c.player)!.hp, 104);
+  bladeSteps(c, 0.5);
+  assert.ok(c.s.health.get(enemy)!.hp < 951);
+  bladeSteps(c, 6);
+  assert.equal(c.s.blade.get(c.player)!.infernoLeft, 0);
+  player(c).invuln = 0;
+  applyDamage(c, c.player, 20, 0);
+  assert.equal(c.s.health.get(c.player)!.hp, 84);
+});
+test('a released Q touch edge aims the directional flame wave at the supplied target', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  applyInput(
+    c,
+    {
+      move: { x: 0, y: 0 },
+      pointer: c.camera.toScreen({ x: 600, y: 750 }),
+      down: 0,
+      pressed: BTN.FIELD,
+      aimActive: false,
+    },
+    1 / 60,
+  );
+  assert.equal(c.s.flameWave.length, 1);
+  assert.ok(Math.abs(c.s.flameWave.data[0].vx) < 0.001);
+  assert.ok(c.s.flameWave.data[0].vy > 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.s.blade.data)), c.s.blade.data);
+});

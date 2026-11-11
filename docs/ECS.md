@@ -66,6 +66,7 @@ app.ticker (真实 dt)
            updateFields    雷暴生命周期 / 周期伤害
            updateMage      雷电法师电场 / 五段震荡 / 连射与环绕伤害
            updateStaffArts 其余四系的区域 / 弹道 / 陨石 / 灼烧
+           updateBlades 魔镰风暴 / 邪阵破土 / 流焰弹道 / 连斩 / 炎躯
            updateSummons   篮球召唤追击 / 扫掠 / 引爆
            updateRules     拾取 / 补怪
            world.flush()   统一删除
@@ -160,3 +161,10 @@ Npc 只含 kind，无 damageable 标签；Journal 保存 stage / killsAtStart / 
 InventoryState 新增 armor.head / chest / legs，保留 boots、合成与36格；装备格索引 42 / 43 / 44，40仍为鞋，41仅用于合成产出。Equip 新增材质字段，护甲减伤统一进入 applyDamage；晨曦完整套装回蓝只在 tickTimers 推进。
 
 建筑的墙 / 门是 Level 瓦片，家具和 NPC 注册阻挡，屋面透明不改变碰撞。inCathedral 统一决定内外状态，SanctuaryView / renderer 只读此函数来隐藏屋顶和内部实体；对话规则也使用同一界限，不能从墙外透视神父后直接领取奖励。
+
+
+## 新兵器组件
+
+`BladeState` 保存魔镰 / 炎剑各自三项冷却、风暴和炎躯计时，以及锁定方向的三斩进度；`RiftStrike` 保存预兆 / 破土 / 命中 / 消退时间；`RiftGroup.hit` 使同次十字地刺对每敌只命中一次；`FlameWave` 保存扫掠速度和穿透去重。`updateBlades` 位于 staffArts 之后、summons 之前，不依赖 Pixi 或动画回调。换武器不取消已释放效果，暂停冻结整条模拟链。上限 rift40 / group4 / wave8，超额不扣蓝。
+
+InventoryCommand 的 `equip` 是守恒交换：只选择已持有武器，若在存储区则与当前快捷格交换；手持光标有物品时拒绝。UI 的三个试玩换装按钮不创造物品。弯刃没有职业或主动技能。

@@ -8,6 +8,7 @@ import { fxFinished, fxFrameIndex, type FxAnim } from '../engine/animation';
 import type { TextureAtlas } from '../engine/atlas';
 import type { Camera } from '../engine/camera';
 import type { GameEvent } from '../engine/ecs';
+import { BladeVfx } from './blade-vfx';
 import { StaffArtsVfx } from './staff-arts-vfx';
 import { MageVfx } from './mage-vfx';
 import { BasketballVfx } from './basketball-vfx';
@@ -38,6 +39,7 @@ export class Presentation {
   private readonly basketball: BasketballVfx;
   private readonly mage: MageVfx;
   private readonly staffArts: StaffArtsVfx;
+  private readonly blades: BladeVfx;
   private readonly decals: Sprite[] = [];
 
   constructor(
@@ -50,11 +52,18 @@ export class Presentation {
     this.basketball = new BasketballVfx(fxLayer, atlas);
     this.mage = new MageVfx(decalLayer, fxLayer, atlas);
     this.staffArts = new StaffArtsVfx(decalLayer, fxLayer);
+    this.blades = new BladeVfx(decalLayer, fxLayer, atlas);
   }
 
   consume(events: GameEvent[]): void {
     for (const ev of events) {
       switch (ev.kind) {
+        case 'bladeArt':
+          this.blades.consume(ev);
+          if (ev.ability === 'clawHit' || ev.ability === 'combo2')
+            this.camera.shake(3, 0.18);
+          else if (ev.ability === 'spikeHit') this.camera.shake(1, 0.1);
+          break;
         case 'staffArt':
           this.staffArts.consume(ev);
           if (ev.ability === 'meteor' || ev.ability === 'collapse')
@@ -178,6 +187,7 @@ export class Presentation {
     this.basketball.clear();
     this.mage.clear();
     this.staffArts.clear();
+    this.blades.clear();
     for (const d of this.decals) {
       this.decalLayer.removeChild(d);
       d.destroy();
@@ -190,6 +200,11 @@ export class Presentation {
     this.pixels.sync(scene, dt);
     this.mage.sync(scene, dt);
     this.staffArts.sync(scene, dt);
+    this.blades.sync(scene, dt);
+  }
+
+  get bladeStats() {
+    return this.blades.stats;
   }
 
   get staffArtsStats() {
