@@ -1,6 +1,15 @@
 /** DOM 是表现层：读取 ECS 快照，发输入/背包命令，从不直接改组件。 */
-import { footRest, handRest } from '../engine/animation';
-import { shoeSpriteName } from '../engine/art';
+import { newLimbPose } from '../engine/animation';
+import { blockPose } from './block-rig';
+import { armorReduction, fullSet } from './armor';
+import { NPCS, inCathedral } from './sanctuary-data';
+import {
+  nearbyNpc,
+  dialogue,
+  questObjective,
+  levelRequirement,
+  type QuestCommand,
+} from './systems/quests';
 import { BTN, type Input } from '../engine/input';
 import type { TextureAtlas } from '../engine/atlas';
 import type { GameEvent } from '../engine/ecs';
@@ -26,11 +35,13 @@ import type { Ctx } from './systems/context';
 import { UI_TEMPLATE } from './ui-template';
 import './ui.css';
 import './mage-ui.css';
+import './sanctuary-ui.css';
 
 export interface UIActions {
   command(command: InventoryCommand): void;
   inventory(open: boolean): void;
   restart(grove?: boolean): void;
+  quest(command: QuestCommand): void;
 }
 export class GameUI {
   readonly element = document.createElement('div');
@@ -68,7 +79,11 @@ export class GameUI {
   }
   get paused(): boolean {
     return (
-      !this.running || this.menuOpen || this.inventoryOpen || this.helpOpen
+      !this.running ||
+      this.menuOpen ||
+      this.inventoryOpen ||
+      this.helpOpen ||
+      !!this.context().s.journal.get(this.context().player)?.talking
     );
   }
   private q<T extends HTMLElement = HTMLElement>(selector: string): T {
@@ -183,50 +198,87 @@ export class GameUI {
       Math.max(0, Math.ceil(hp.hp)),
     );
     this.q('#av-mana-orb b').textContent = String(Math.floor(player.mana));
-    this.q('#av-region-name').textContent =
-      ctx.world.pos(ctx.player).x > 48 * 32
+    this.q('#av-region-name').textContent = inCathedral(
+      ctx.world.pos(ctx.player),
+    )
+      ? '晨曦大教堂 · 圣堂内殿'
+      : ctx.world.pos(ctx.player).x > 48 * 32
         ? '古树祭坛 · 雷电觉醒'
         : '灰烬谷 · 东行前往古树祭坛';
   }
   private preview(): void {
     const canvas = this.q<HTMLCanvasElement>('#av-avatar-preview'),
-      g = canvas.getContext('2d')!;
+      g = canvas.getContext('2d')!,
+      eq = this.context().s.equip.get(this.context().player)!;
     g.clearRect(0, 0, canvas.width, canvas.height);
     g.imageSmoothingEnabled = false;
-    const scale = 3,
-      origin = { x: 64, y: 148 };
-    const draw = (
-      name: string,
-      x: number,
-      y: number,
-      ax: number,
-      ay: number,
-    ) => {
-      const f = this.atlas.frames[name];
+    for (const p of blockPose(newLimbPose(), eq, 'front', false)) {
+      const f = this.atlas.frames[p.frame];
+      g.save();
+      g.translate(64 + p.x * 2.5, 148 + p.y * 2.5);
+      g.rotate(p.rotation);
+      g.scale(2.5 * p.sx, 2.5 * p.sy);
       g.drawImage(
         this.atlas.canvas,
         f.x,
         f.y,
         f.w,
         f.h,
-        origin.x + (x - f.w * ax) * scale,
-        origin.y + (y - f.h * ay) * scale,
-        f.w * scale,
-        f.h * scale,
+        -p.ax * f.w,
+        -p.ay * f.h,
+        f.w,
+        f.h,
       );
-    };
-    draw('heroFrontBody', 0, -12, 0.5, 30 / 48);
-    const shoes =
-      this.context().s.equip.get(this.context().player)?.shoes || 'bare';
-    for (let i = 0; i < 2; i++) {
-      const foot = footRest('front', i, false);
-      draw(shoeSpriteName(shoes, false), foot.x, foot.y, 0.5, 13 / 14);
+      g.restore();
     }
-    draw('heroFrontHead', 0, -12, 0.5, 30 / 48);
-    for (let i = 0; i < 2; i++) {
-      const hand = handRest('front', i, false);
-      draw('partHand', hand.x, hand.y - 12, 0.5, 0.5);
-    }
+  }
+  private dialogueKey = '';
+  private updateJournal(ctx: Ctx): void {
+    const j = ctx.s.journal.get(ctx.player)!,
+      npc = nearbyNpc(ctx),
+      def = dialogue(ctx),
+      open = !!def && !this.menuOpen && !this.inventoryOpen;
+    this.q('#av-dialogue').hidden = !open;
+    this.element.classList.toggle('talking', open);
+    this.q('#av-interact').hidden = !npc || this.paused;
+    if (npc)
+      this.q('#av-interact').textContent =
+        '交谈 C · ' + NPCS[ctx.s.npc.get(npc)!.kind].name;
+    this.q('#av-quest-objective').textContent = questObjective(ctx);
+    this.q('#av-xp').textContent =
+      `等级 ${j.level} · ${j.xp} / ${levelRequirement(j.level)} 经验`;
+    if (def) {
+      const key = JSON.stringify(def);
+      if (this.dialogueKey !== key) {
+        this.dialogueKey = key;
+        this.q('#av-dialogue-name').textContent = def.title;
+        this.q('#av-dialogue-title').textContent = def.subtitle;
+        this.q('#av-dialogue-text').textContent = def.body;
+        this.q('#av-dialogue-choices').innerHTML = def.choices
+          .map(
+            (c) =>
+              `<button data-quest-action="${c.command}">${c.label}</button>`,
+          )
+          .join('');
+        const canvas = this.q<HTMLCanvasElement>('#av-dialogue-portrait'),
+          g = canvas.getContext('2d')!,
+          kind = ctx.s.npc.get(j.talking)!.kind,
+          f = this.atlas.frames[NPCS[kind].sprite];
+        g.clearRect(0, 0, 96, 112);
+        g.imageSmoothingEnabled = false;
+        g.drawImage(
+          this.atlas.canvas,
+          f.x,
+          f.y,
+          f.w,
+          f.h,
+          (96 - f.w) / 2,
+          112 - f.h,
+          f.w,
+          f.h,
+        );
+      }
+    } else this.dialogueKey = '';
   }
   toast(message: string): void {
     this.q('#av-toast').textContent = message;
@@ -260,7 +312,7 @@ export class GameUI {
     this.q('#av-start2').textContent = this.running ? '重新启程' : '进入灰烬谷';
     this.q('#av-menu-desc').textContent = this.context().gameOver
       ? '旅途在此暂歇。带上新的补给，再一次踏入灰烬谷。'
-      : '五系法杖，各有三种秘术。前往东侧祭坛取得雷电法杖，集齐五系职业。';
+      : '神树重新焕发生机。与圣使交谈，探索南侧晨曦大教堂，寻找属于你的圣甲。';
   }
   restarted(): void {
     this.running = true;
@@ -270,7 +322,7 @@ export class GameUI {
     this.setInventory(false);
     this.setMenu(false);
     this.lastRevision = -1;
-    this.toast('Q / F / R 三技能 · 切换法杖切换职业 · E 背包');
+    this.toast('C 与圣使交谈 · 向南探索教堂 · E 四部位换装');
   }
   private setHelp(open: boolean): void {
     this.helpOpen = open;
@@ -315,7 +367,22 @@ export class GameUI {
       'aria-label',
       output ? '合成 ' + ITEMS[output.id].name : '没有匹配的配方',
     );
-    this.q('#av-equipment').innerHTML = this.slotHTML(inv.boots, 40);
+    this.q('#av-equipment').innerHTML = (
+      [
+        ['头盔', 42, inv.armor.head],
+        ['胸甲', 43, inv.armor.chest],
+        ['护腿', 44, inv.armor.legs],
+        ['靴子', 40, inv.boots],
+      ] as const
+    )
+      .map(
+        ([label, index, item]) =>
+          `<div class="av-armor-cell">${this.slotHTML(item, index)}<small>${label}</small></div>`,
+      )
+      .join('');
+    const eq = this.context().s.equip.get(this.context().player)!;
+    this.q('#av-gear-stats').textContent =
+      `减伤 ${armorReduction(eq)} · ${fullSet(eq) === 'sanctum' ? '晨曦套装\n法力 +2/秒' : fullSet(eq) ? '完整套装' : '可混搭装备'}`;
     this.q('#av-boot-name').textContent = inv.boots
       ? ITEMS[inv.boots.id].name
       : '未装备靴子';
@@ -353,6 +420,23 @@ export class GameUI {
       this.actions.command({ type: 'select', index });
   }
   private events(): void {
+    this.q('#av-interact').onclick = () => this.actions.quest({ type: 'talk' });
+    this.q('#av-dialogue-close').onclick = () =>
+      this.actions.quest({ type: 'close' });
+    this.q('#av-dialogue-choices').onclick = (e) => {
+      const button = (e.target as Element).closest<HTMLElement>(
+        '[data-quest-action]',
+      );
+      if (button)
+        this.actions.quest({
+          type: button.dataset.questAction as
+            | 'accept'
+            | 'report'
+            | 'bless'
+            | 'heal'
+            | 'close',
+        });
+    };
     this.q('#av-start2').onclick = () => this.actions.restart();
     this.q('#av-start-grove').onclick = () => this.actions.restart(true);
     this.q('#av-utility-bag').onclick = () => {
@@ -482,6 +566,22 @@ export class GameUI {
       e.preventDefault();
       e.stopImmediatePropagation();
     };
+    if (
+      !this.menuOpen &&
+      this.context().s.journal.get(this.context().player)?.talking &&
+      (k === 'escape' || k === 'c')
+    ) {
+      handled();
+      if (!e.repeat) this.actions.quest({ type: 'close' });
+      return;
+    }
+    if (
+      !this.menuOpen &&
+      this.context().s.journal.get(this.context().player)?.talking
+    ) {
+      handled();
+      return;
+    }
     if (k === 'escape') {
       handled();
       if (this.helpOpen) this.setHelp(false);
@@ -496,6 +596,11 @@ export class GameUI {
     }
     if (this.helpOpen || !this.running || this.menuOpen) {
       handled();
+      return;
+    }
+    if (k === 'c' && !this.inventoryOpen) {
+      handled();
+      if (!e.repeat) this.actions.quest({ type: 'talk' });
       return;
     }
     if (['e', 'tab', 'b'].includes(k)) {
@@ -592,6 +697,7 @@ export class GameUI {
   }
   update(ctx: Ctx, dt: number, fps: number): void {
     this.updateMageHUD(ctx);
+    this.updateJournal(ctx);
     const p = ctx.s.player.get(ctx.player)!,
       hp = ctx.s.health.get(ctx.player)!;
     this.q('#av-health-value').textContent =
@@ -604,7 +710,7 @@ export class GameUI {
     this.q('#av-kills').textContent =
       `击败 ${p.kills}  ·  ${p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
     this.q('#av-level').textContent = String(
-      1 + Math.floor(p.kills / 10),
+      ctx.s.journal.get(ctx.player)!.level,
     ).padStart(2, '0');
     const selected = this.inventory.slots[this.inventory.selected],
       item = selected ? ITEMS[selected.id] : null,
@@ -681,6 +787,13 @@ export class GameUI {
         g.fillStyle = colors[l.at(x, y)];
         g.fillRect(x * 2, y * 2, 2, 2);
       }
+    g.strokeStyle = '#d9bc7f';
+    g.strokeRect(106, 68, 30, 44);
+    ctx.s.npc.forEach((id, n) => {
+      const p = ctx.world.pos(id);
+      g.fillStyle = n.kind === 'herald' ? '#e7e4b5' : '#cdbb9a';
+      g.fillRect(p.x / 16 - 2, p.y / 16 - 2, 4, 4);
+    });
     g.fillStyle = '#73d9b9';
     g.fillRect(GROVE.altar.x / 16 - 2, GROVE.altar.y / 16 - 2, 4, 4);
     const pos = ctx.world.pos(ctx.player);

@@ -2,6 +2,8 @@
 import type { Painter, Spec, Skin } from '../engine/art';
 import type { View } from '../engine/facing';
 import { makeRng } from '../engine/math';
+import { sanctuarySpecs } from './sanctuary-art';
+import { blockSpecs, drawArmorIcon } from './block-art';
 import { staffSpecs } from './staff-art';
 import { groveSpecs } from './grove-art';
 import { basketballSpecs, drawBasketball } from './basketball-art';
@@ -217,6 +219,8 @@ export function upgradeSpecs(
     ...basketballSpecs(),
     ...groveSpecs(),
     ...staffSpecs(),
+    ...sanctuarySpecs(),
+    ...blockSpecs(),
   ];
   for (const element of SKILL_IDS) {
     specs.push({
@@ -327,9 +331,21 @@ export function upgradeSpecs(
           p.ctx.restore();
           p.rect(17, 13, 7, 2, '#d9d09c');
           p.rect(19, 11, 2, 7, '#d9d09c');
+        } else if (item.kind === 'armor') {
+          drawArmorIcon(p, item.armorMat!, item.armorSlot!);
         } else if (item.kind === 'boots') {
-          const dark = id === 'iron' ? '#61757a' : '#775739',
-            light = id === 'iron' ? '#c1d2ca' : '#bf9c66';
+          const dark =
+              id === 'sanctum_boots'
+                ? '#718b7b'
+                : id === 'iron'
+                  ? '#61757a'
+                  : '#775739',
+            light =
+              id === 'sanctum_boots'
+                ? '#eee4ba'
+                : id === 'iron'
+                  ? '#c1d2ca'
+                  : '#bf9c66';
           for (let x of [7, 22]) {
             p.rect(x, 9, 10, 19, '#28382e');
             p.rect(x + 1, 10, 8, 15, dark);

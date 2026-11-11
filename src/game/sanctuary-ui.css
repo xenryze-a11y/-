@@ -1,0 +1,271 @@
+/* 圣域交谈、任务及四部位装备；战斗圆键沿用既有无底框布局。 */
+#av-quest-tracker {
+  position: absolute;
+  top: 178px;
+  left: 25px;
+  width: 210px;
+  padding: 10px 12px;
+  border-left: 2px solid #c8bc7b;
+  background: #14251dc2;
+  color: #cfceb0;
+  pointer-events: none;
+  font-size: 11px;
+  line-height: 1.65;
+}
+#av-quest-tracker b {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: #e3d3a2;
+}
+#av-quest-tracker p {
+  margin: 5px 0;
+}
+#av-quest-tracker small {
+  color: #92aa93;
+  font-size: 9px;
+}
+#av-interact {
+  position: absolute;
+  bottom: 286px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  border: 1px solid #a3ad7a;
+  border-radius: 30px;
+  background: #1b3028e8;
+  color: #ece5bf;
+  padding: 10px 18px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#av-equipment {
+  display: grid;
+  grid-template-columns: repeat(2, 40px);
+  gap: 3px 8px;
+}
+.av-armor-cell {
+  text-align: center;
+}
+.av-armor-cell small {
+  display: block;
+  font-size: 9px;
+  color: #b4bd9e;
+}
+.av-armor-cell .av-slot {
+  margin-top: 2px;
+}
+#av-gear-stats {
+  white-space: pre-line;
+  max-width: 125px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+#av-dialogue {
+  z-index: 45;
+  align-items: flex-end;
+  background: #08130b44;
+  backdrop-filter: none;
+  padding: 25px 25px 36px;
+}
+.av-dialogue-card {
+  position: relative;
+  width: 680px;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding: 25px 30px;
+  border: 1px solid #8f9564;
+  background: linear-gradient(135deg, #25382df7, #101e1bf7);
+  box-shadow: 0 15px 70px #0009;
+  pointer-events: auto;
+}
+.av-dialogue-card canvas {
+  width: 96px;
+  height: 112px;
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+.av-dialogue-copy {
+  flex: 1;
+  min-width: 0;
+}
+.av-dialogue-copy small {
+  color: #acb58e;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+}
+.av-dialogue-copy h2 {
+  font-size: 20px;
+  font-weight: 500;
+  color: #e4d7ac;
+  margin: 6px 0 12px;
+}
+.av-dialogue-copy p {
+  font-size: 13px;
+  line-height: 1.9;
+  color: #ced4ba;
+  white-space: pre-line;
+}
+#av-dialogue-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 16px;
+}
+#av-dialogue-choices button {
+  padding: 9px 12px;
+  color: #e2d5af;
+  border: 1px solid #788461;
+  background: #344b38;
+  font-size: 11px;
+  cursor: pointer;
+}
+#av-dialogue-choices button:hover {
+  background: #496049;
+}
+#av-dialogue-close {
+  position: absolute;
+  right: 12px;
+  top: 10px;
+  background: none;
+  border: 0;
+  font-size: 10px;
+  color: #aeb69b;
+  cursor: pointer;
+}
+#av2.talking #av-combat,
+#av2.talking #av-bottom,
+#av2.talking #av-stick2 {
+  visibility: hidden;
+}
+#av-map {
+  width: 112px;
+  height: 106px;
+}
+#av2.inventory-open #av-quest-tracker {
+  visibility: hidden;
+}
+@media (max-width: 650px) {
+  #av-quest-tracker {
+    top: 172px;
+    left: 12px;
+    width: 156px;
+    padding: 7px 9px;
+    font-size: 10px;
+  }
+  #av-quest-tracker b {
+    font-size: 10px;
+  }
+  #av-quest-tracker small {
+    font-size: 8px;
+  }
+  #av-interact {
+    bottom: 263px;
+    left: auto;
+    right: 14px;
+    transform: none;
+    font-size: 10px;
+    padding: 9px 12px;
+  }
+  .av-preview {
+    gap: 10px;
+    padding: 8px;
+  }
+  .av-preview canvas {
+    width: 80px;
+    height: 100px;
+  }
+  #av-equipment {
+    grid-template-columns: repeat(2, 34px);
+    gap: 2px 7px;
+  }
+  .av-preview .av-slot {
+    --slot: 34px;
+  }
+  #av-dialogue {
+    padding: 12px 12px 20px;
+  }
+  .av-dialogue-card {
+    gap: 12px;
+    padding: 29px 17px 18px;
+  }
+  .av-dialogue-card canvas {
+    width: 54px;
+    height: 63px;
+    align-self: flex-start;
+    margin-top: 7px;
+  }
+  .av-dialogue-copy h2 {
+    font-size: 16px;
+  }
+  .av-dialogue-copy p {
+    font-size: 12px;
+    line-height: 1.85;
+  }
+  #av-dialogue-choices {
+    flex-direction: column;
+  }
+  #av-dialogue-choices button {
+    font-size: 11px;
+    padding: 10px;
+  }
+  #av-map {
+    width: 83px;
+    height: 78px;
+  }
+}
+@media (max-height: 480px) and (min-width: 651px) {
+  #av-quest-tracker {
+    top: 20px;
+    left: 210px;
+    width: 172px;
+    font-size: 9px;
+    padding: 6px 8px;
+  }
+  #av-interact {
+    bottom: 55px;
+    left: 230px;
+    font-size: 10px;
+  }
+  #av-equipment {
+    grid-template-columns: repeat(2, 30px);
+    gap: 1px 4px;
+  }
+  #av-gear-stats {
+    white-space: pre-line;
+    font-size: 9px;
+  }
+  .av-preview .av-slot {
+    --slot: 30px;
+  }
+  .av-armor-cell small {
+    font-size: 8px;
+  }
+  #av-dialogue {
+    padding: 15px;
+  }
+  .av-dialogue-card {
+    width: 680px;
+    padding: 19px 25px;
+  }
+  .av-dialogue-copy p {
+    font-size: 12px;
+    line-height: 1.7;
+  }
+  #av-map {
+    width: 83px;
+    height: 78px;
+  }
+}
+
+@media (max-width: 650px) {
+  .av-vitals .eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.05em;
+  }
+  .av-vitals .eyebrow span:first-child {
+    white-space: nowrap;
+  }
+}

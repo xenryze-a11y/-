@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-打开 `http://127.0.0.1:5173`。看到一片中世纪地图、蓝色法袍的法师、几只亡者 = 成功。
+打开 `http://127.0.0.1:5173`。看到一片中世纪地图、模块化方块旅人、几只亡者 = 成功。
 
 素材随源码自带，运行时不用下载。法杖原稿经 `generated-staves.ts` 处理，在上传 GPU 前合入同一图集；像素法术入口是 `pixel-spell-vfx.ts`，容量、配色和时序在 `spell-visuals.ts`。**操作以 [README.md](../README.md) 和 H 手册为准**：WASD 移动，左键使用，右键 / F 特殊技，空格翻滚，1–9 换快捷栏，E / Tab / B 背包与合成，第 9 格篮球召唤，X 用药，G 丢一个，Esc 暂停。手机自动显示摇杆与技能按钮。菜单「重新启程」重置背包与地图。
 
@@ -25,17 +25,17 @@ npm run dev
 
 ## 2. 改一个系统行为（1 分钟）
 
-打开 [`src/game/items.ts`](../src/game/items.ts) 的 `SKILLS.frost.cd`，把 `4.5` 临时改成 `2`。选择第 2 格霜晶杖，右键新星的冷却会明显更短。体验后改回去。
+打开 `src/game/staff-data.ts` 的 `STAFF_PROFESSIONS.frost.skills.wave.cooldown`，把 `4.3` 临时改成 `2`。选择第 2 格霜晶杖，F 冰矛的冷却会明显更短。体验后改回去。
 
-**这说明**：物品 / 法杖内容在 `items.ts`，技能判定在 `systems/magic.ts`，计时推进在 `timers.ts`。新系统仍不能插到攻击判定之前。
+**这说明**：物品 / 法杖内容在 `items.ts / staff-data.ts`，技能判定在 `systems/profession.ts / staff-arts.ts`，计时推进在 `timers.ts`。新系统仍不能插到攻击判定之前。
 
 ## 3. 摸一下换装接缝（30 秒）
 
 游戏里按 **`E`**，点击背包里的铁靴，再点击角色旁边的靴子装备位。手里的皮靴可以放回空格。快捷栏与背包共用一份 inventory Store。
 
-然后打开 [`src/engine/art.ts`](../src/engine/art.ts) 的 `SHOE_COLORS`，把 `iron` 的 `mid` 从 `P.iron` 改成 `'#ff00ff'`，保存 → 铁靴变成品红色。
+然后打开 `src/game/armor.ts` 的 `ARMOR_COLORS`，把 `iron.mid` 改成 `'#ff00ff'`，保存 → 铁甲部件变成品红色。
 
-**这说明**：鞋是独立贴图 `shoe<Mat>[Side]`，渲染层按 `Equip.shoes` 拼名字换 texture，**换装只改数据，不改绘制代码**。加一种材质要动哪几处，见 [ART.md](ART.md)「鞋可以换装」。
+**这说明**：玩家各部件使用 `block_<part>_<mat>_<view>` 帧，渲染层只读 Equip 材质；**换装不改骨架挂点**。旧怪物仍用 shoe<Mat>[Side]，新增套装看 [SANCTUARY.md](SANCTUARY.md)。
 
 ## 4. 加一个组件 + 一个系统（2 分钟）
 
@@ -65,7 +65,7 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 | 加一种敌人行为 | `data.ts` → `spawn.ts` 的 `addMob` → `systems/ai.ts` | [ECS.md](ECS.md) |
 | 加组件 / 系统 | `game/components.ts` + `game/systems/` + `main.ts` | [ECS.md](ECS.md) |
 | 换武器 / 加技能 | `systems/control.ts` + `combat.ts` + `data.ts` | README |
-| 换鞋 / 加装备材质 | `data.ts` 的 `SHOE_MATERIALS` + `art.ts` 的 `SHOE_COLORS` | [ART.md](ART.md) |
+| 换鞋 / 加装备材质 | `armor.ts` + `items.ts` + `block-art.ts`（玩家） | [ART.md](ART.md) |
 | 调走路姿态 / 脚大小 | `engine/animation.ts` 的 `RIG` | [ART.md](ART.md) |
 | 换整套美术 | 控制台 `__ASHEN__.dumpAtlas()` → 改 PNG → 放 `public/assets/` | [ART.md](ART.md) |
 | 加特效 / 飘字 / 音效 | 只改 `game/present.ts` | [ECS.md](ECS.md)「事件」 |
@@ -81,7 +81,7 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 | 角色贴墙还在原地踏步 | 走路相位读成输入向量了；必须比较前后两帧**实际位置** |
 | 同一帧打出两次攻击 | 冷却推进被放到了攻击判定之前，看 `main.ts` 系统链 |
 | 侧面又出现两条正面并排的腿 | 有人把 front 的绘制复用到 Side；见 [DECISIONS.md](DECISIONS.md) D7 |
-| 换装没生效 | `Equip.shoes` 没设（新建实体时容易漏），渲染层会兜底成 `cloth` |
+| 换装没生效 | 检查 InventoryState 的 armor / boots、syncEquipment 与 Equip 材质是否一致 |
 | 查询命中时多时少 | 直接改了 `world.pos(e).x`；位置只能经 `world.setPos()` |
 
 调试接口：控制台 `__ASHEN__.world`（所有实体）、`.ctx`（当前系统上下文）、`.scene`（地图与 stores）、`.restart()`。
@@ -114,3 +114,10 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 菜单「探索古树祭坛」便于直接试玩新区域，向祭坛走近取得雷电法杖后解锁。Q 电场、F / 右键五段震荡、R 身后连射 + 周身高速环绕；其余四根法杖也各有三种职业技能，长剑与篮球的 F / 武技保留。职业状态在 `s.mage`，波列在 `s.wave`，`updateMage` 处理雷电，随后 `updateStaffArts` 处理四系区域、弹道、陨石和灼烧，再运行 summons。UI 不写冷却，环形 SVG 只读取剩余 / 总冷却。普通 / 巨树与图标原稿在 `assets/source`，运行时仅内嵌规范化小图。详见 [STORM_MAGE.md](STORM_MAGE.md)。
 
 五系内容入口：`staff-data.ts` → `systems/profession.ts / staff-arts.ts` → `staff-arts-vfx.ts / staff-art.ts`。新图标以 CPU Canvas 截图传给 DOM，技能按钮共用真实冷却数据；技能与辅助键均无外部大框。祭坛和原区域相机倍率 / 高度相同。完整内容表见 [STAFF_PROFESSIONS.md](STAFF_PROFESSIONS.md)。
+
+
+## 圣域和四部位装备
+
+先读 [SANCTUARY.md](SANCTUARY.md)。区域 / 门洞 / NPC 坐标在 sanctuary-data.ts，地形在 grove.ts，教堂屋面和内饰在 sanctuary-art.ts / sanctuary-view.ts；所有树改为程序绘制，grove-art.ts 仅加载原雷电图标。玩家骨架在 block-rig.ts，部件绘制在 block-art.ts，Sprite 复用在 block-avatar.ts；怪物仍用旧骨架。装备槽为 40 靴子、42 头盔、43 胸甲、44 护腿，41 仍是合成产出，不能复用。
+
+C 发起近距离交谈，quests.ts 决定接受 / 复命 / 祝福 / 治疗；UI 只发 QuestCommand，所有对话期间冻结模拟和表现。打开背包试穿铁甲，或完成圣使 → 神父任务领取晨曦四件套。新旅途重置进度；仍未加入存档和联机。

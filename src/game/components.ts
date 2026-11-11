@@ -3,6 +3,8 @@
  * ⚠️ 表现层的走路相位 / 混合 / 显示对象 **不放这里**，见 engine/renderer.ts 的 AvatarView。
  * 那条隔离保证「有没有渲染」不影响模拟结果，也是以后接服务端权威的前提。
  */
+import type { ArmorMat } from './armor';
+import type { NpcKind } from './sanctuary-data';
 import type { ElementStaffId } from './staff-data';
 import type { MageSkillId } from './mage-data';
 import type { Store, World } from '../engine/ecs';
@@ -11,6 +13,7 @@ import type { SkillId, ItemId, AbilityId } from './items';
 import type { Vec2 } from '../engine/math';
 
 export const TAG = {
+  NPC: 'npc',
   PLAYER: 'player',
   MOB: 'mob',
   PROJECTILE: 'projectile',
@@ -22,6 +25,8 @@ export const TAG = {
 } as const;
 
 export const C = {
+  NPC: 'npc',
+  JOURNAL: 'journal',
   RADIUS: 'radius',
   HEALTH: 'health',
   FACING: 'facing',
@@ -221,10 +226,19 @@ export interface Dodge {
 
 /** 渲染层只读：这个实体该用哪套贴图、多大、要不要血条。 */
 /** 鞋材质。贴图名 = shoe<Mat>[Side]，见 engine/art.ts 的 shoeSpriteName。 */
-export type ShoeMat = 'bare' | 'cloth' | 'leather' | 'iron' | 'zombieBare';
+export type ShoeMat =
+  | 'bare'
+  | 'cloth'
+  | 'leather'
+  | 'iron'
+  | 'zombieBare'
+  | 'sanctum';
 
 /** 可换装的部分。以后加护甲/头盔就往这里加字段，渲染层按材质拼贴图名。 */
 export interface Equip {
+  head?: ArmorMat;
+  chest?: ArmorMat;
+  legs?: ArmorMat;
   shoes: ShoeMat;
 }
 
@@ -239,7 +253,19 @@ export interface Look {
   staticSprite?: string;
 }
 
+export interface Npc {
+  kind: NpcKind;
+}
+export interface Journal {
+  stage: 'unmet' | 'purifying' | 'pilgrimage' | 'complete';
+  killsAtStart: number;
+  talking: number;
+  level: number;
+  xp: number;
+}
 export interface Stores {
+  npc: Store<Npc>;
+  journal: Store<Journal>;
   radius: Store<Radius>;
   health: Store<Health>;
   facing: Store<Facing>;
@@ -263,6 +289,8 @@ export interface Stores {
 
 export function createStores(w: World): Stores {
   return {
+    npc: w.register<Npc>(C.NPC),
+    journal: w.register<Journal>(C.JOURNAL),
     radius: w.register<Radius>(C.RADIUS),
     health: w.register<Health>(C.HEALTH),
     facing: w.register<Facing>(C.FACING),
