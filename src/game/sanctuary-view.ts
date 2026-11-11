@@ -39,17 +39,6 @@ export class SanctuaryView {
     this.glow.clear();
     const t = this.time,
       at = GROVE.tree;
-    for (let i = 0; i < 80; i++) {
-      const a = (i / 80) * Math.PI * 2;
-      this.glow
-        .rect(
-          Math.round(at.x + Math.cos(a) * 65),
-          Math.round(at.y + Math.sin(a) * 16),
-          2,
-          2,
-        )
-        .fill({ color: 0xd9d29d, alpha: 0.48 });
-    }
     for (let i = 0; i < 26; i++) {
       const a = i * 2.399 + t * 0.12,
         r = 25 + (i % 6) * 15,

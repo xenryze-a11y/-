@@ -2,6 +2,7 @@
 import type { Painter, Spec, Skin } from '../engine/art';
 import type { View } from '../engine/facing';
 import { makeRng } from '../engine/math';
+import { sanctumGroundSpecs } from './sanctum-rebuilt-art';
 import { bladeSpecs, drawBlade } from './blade-art';
 import { BLADES, isBlade } from './weapon-data';
 import { sanctuarySpecs } from './sanctuary-art';
@@ -224,6 +225,7 @@ export function upgradeSpecs(
     ...sanctuarySpecs(),
     ...blockSpecs(),
     ...bladeSpecs(),
+    ...sanctumGroundSpecs(),
   ];
   for (const element of SKILL_IDS) {
     specs.push({

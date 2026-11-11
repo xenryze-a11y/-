@@ -207,3 +207,19 @@ sanctuary-art.ts 生成 96×128 普通树、320×352 神树（由 groveSpecs 调
 六个技能图标64×64，以 skill_<scythe|greatsword>_<field|wave|barrage> 命名，读取真实冷却环。按用户最新要求，魔爪 / 地刺 / 法阵 / 旋风 / 冲击环改为生成素材，再由 prepare-scythe-vfx.cjs 最近邻规范化到 scythe-vfx.png（576×448），布局见 scythe-vfx-frames.json。魔爪6帧96×128、地刺5帧48×80，按模拟预兆时间选帧，出土前隐藏。每个 rift 都有自己的眼纹符文法阵与地裂；40组池化的圆阵 / 裂纹 Sprite 共用原图集，避免每帧重画17套复杂 Graphics。BladeVfx 的风暴虚影、流焰三斩、火焰护体和粒子只读状态；burst64、粒子320、虚影镰刀3、连斩残影3，上限不随反复施法增长。
 
 造型参考、原稿与处理元数据见 assets/README.md 和 source/blade-normalization.json；没有把网上参考图片作为游戏贴图。
+
+
+## 炎剑生成特效与圣域重像素化（最新）
+
+flame-vfx.png包含六帧96×80焰潮、三种128×128重斩、三帧128×128炎躯；BladeVfx固定6个斩光Sprite与1个护体Sprite，火焰伤害仍由模拟负责。护体留空中心，不能遮住人物；三斩的挥剑残影保留真实武器图。神树 / 祭坛为新生成素材，普通树和教堂仍程序绘制，这替代前文对所有树的旧限定。
+
+sanctuary-generated.png中的神树320×352、祭坛128×96、圣使96×112和神父48×64使用更强像素处理：先绘到半分辨率，匹配32种地图色，再2倍最近邻放大。两位NPC各4帧，脚底为圣使94 / 神父60，4FPS只读站立循环；不额外上下飘动。原稿、布局JSON与prepare-flame-sanctuary.cjs一起保存，默认构建不需要Playwright。武器持握约放大18%，仅改scale并保留原grip，不更改角色骨架 / 攻击范围。
+
+
+## 圣域整体重建与分层炎躯（最新）
+
+新增4张生成原稿：sanctum-props-rebuilt、sanctum-terrain-generated、cathedral-exterior-generated、cathedral-interior-generated。prepare-sanctum-rebuild.cjs以半尺寸、46色、硬透明和2倍最近邻输出sanctum-rebuilt.png及15帧JSON，验证矩形无重叠后写出。内容包含新神树 / 祭坛、教堂屋面 / 内地面 / 四种家具、四种32×32地面、根床、花石、太阳纹镶嵌。白色连通背景仅从图像边缘剔除，保留象牙石雕。运行最后覆盖原图集，旧原稿仅存档；普通树仍程序绘制。
+
+sanctum-ground.ts只选择显示材质，避开旧城镇、水和墙，保留碰撞 / 两个门洞；地面和低花石 / 根床随场景地面一次烘焙。神树 / 祭坛不再套partPropShadow，树根以原脚底锚点接入根床，不靠暗色椭圆假装落地。教堂保持外部隐藏NPC、进入揭顶 / 离开遮蔽的同一规则。
+
+炎躯生成帧在CPU图集分为Back / Front：分界行86，后景放入玩家BlockAvatar根容器z1，前缘z30，头部和身体仍在中间，全部随人物按脚底排序。不能把整张护体图盖在FX顶层遮住头脸。Q每0.18秒自动挥一次，挥击动画0.16秒，五次交替挥向锁定角，各自配一波；火浪Sprite放大1.3，模拟半径56。

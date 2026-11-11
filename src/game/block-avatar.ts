@@ -14,6 +14,8 @@ export class BlockAvatar {
   readonly parts = new Map<string, Sprite>();
   readonly weapon: Sprite;
   readonly shadow: Sprite;
+  readonly infernoBack: Sprite;
+  readonly infernoFront: Sprite;
   private visualAngle?: number;
   private time = 0;
   constructor(private readonly atlas: TextureAtlas) {
@@ -24,6 +26,17 @@ export class BlockAvatar {
     this.shadow.alpha = 0.6;
     this.shadow.zIndex = 0;
     this.root.addChild(this.shadow);
+    this.infernoBack = new Sprite(atlas.get('bladeInfernoBack_0'));
+    this.infernoFront = new Sprite(atlas.get('bladeInfernoFront_0'));
+    for (const effect of [this.infernoBack, this.infernoFront]) {
+      effect.anchor.set(0.5, 0.78);
+      effect.position.set(0, 2);
+      effect.scale.set(0.96);
+      effect.visible = false;
+      this.root.addChild(effect);
+    }
+    this.infernoBack.zIndex = 1;
+    this.infernoFront.zIndex = 30;
     this.weapon = new Sprite(atlas.get('staff_ember'));
     this.root.addChild(this.weapon);
   }
@@ -37,13 +50,27 @@ export class BlockAvatar {
     updateWalk(this.pose, pos.x, pos.y, dt);
     this.visualAngle = fourDirection(f.angle, this.visualAngle);
     const { view, flip } = facingView(this.visualAngle);
-    const duration = isBlade(pl.weapon)
-        ? s.blade.get(id)!.comboLeft > 0
-          ? BLADE_MAGIC.combo.anim
-          : BLADES[pl.weapon].anim
-        : pl.weapon === 'staff'
-          ? CFG.staff.animDur
-          : CFG.sword.animDur,
+    const state = s.blade.get(id)!,
+      waveSwing = pl.weapon === 'greatsword' && state.waveSwingLeft > 0;
+    for (const [effect, part] of [
+      [this.infernoBack, 'Back'],
+      [this.infernoFront, 'Front'],
+    ] as const) {
+      effect.visible = state.infernoLeft > 0;
+      effect.texture = this.atlas.get(
+        'bladeInferno' + part + '_' + (Math.floor(this.time * 8) % 3),
+      );
+      effect.alpha = Math.min(0.9, state.infernoLeft * 2);
+    }
+    const duration = waveSwing
+        ? BLADE_MAGIC.wave.swingDuration
+        : isBlade(pl.weapon)
+          ? state.comboLeft > 0
+            ? BLADE_MAGIC.combo.anim
+            : BLADES[pl.weapon].anim
+          : pl.weapon === 'staff'
+            ? CFG.staff.animDur
+            : CFG.sword.animDur,
       attack =
         pl.attackAnim > 0
           ? Math.sin((1 - pl.attackAnim / duration) * Math.PI)
@@ -98,25 +125,27 @@ export class BlockAvatar {
     );
     // 长柄镰刀待机竖持，转向只小幅摆杆；挥击时才跟随真实攻击角。
     // 否则朝下瞄准会把整个镰头倒插脚边，失去轮廓和重量感。
-    let rotation = staff || pl.weapon === 'scythe'
-      ? view === 'back'
-        ? -0.15
-        : view === 'side'
-          ? flip
-            ? -0.25
-            : 0.25
-          : 0.16
-      : ball
-        ? 0
-        : f.angle + Math.PI / 2 - 0.5;
+    let rotation =
+      staff || pl.weapon === 'scythe'
+        ? view === 'back'
+          ? -0.15
+          : view === 'side'
+            ? flip
+              ? -0.25
+              : 0.25
+            : 0.16
+        : ball
+          ? 0
+          : f.angle + Math.PI / 2 - 0.5;
     if (pl.attackAnim > 0 && !staff && !ball) {
       const t = 1 - pl.attackAnim / duration,
         eased = 1 - (1 - t) * (1 - t);
       const arc = blade ? blade.arc : CFG.sword.arc,
-        reverse =
-          pl.weapon === 'greatsword' &&
-          s.blade.get(id)!.comboLeft > 0 &&
-          s.blade.get(id)!.comboPhase === 2;
+        reverse = waveSwing
+          ? state.waveSwingIndex % 2 === 1
+          : pl.weapon === 'greatsword' &&
+            state.comboLeft > 0 &&
+            state.comboPhase === 2;
       rotation =
         pl.swingAngle +
         Math.PI / 2 +
@@ -124,7 +153,7 @@ export class BlockAvatar {
     } else if (staff && pl.castAnim > 0) rotation = f.angle + Math.PI / 2;
     this.weapon.rotation = rotation;
     this.weapon.scale.set(
-      blade ? blade.scale : staff ? BLOCK_RIG.weaponScale : ball ? 0.65 : 0.85,
+      blade ? blade.scale : staff ? BLOCK_RIG.weaponScale : ball ? 0.75 : 1,
     );
     this.weapon.zIndex = view === 'back' ? 9 : 16;
     const d = s.dodge.get(id);

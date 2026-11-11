@@ -48,3 +48,17 @@ scripts/prepare-blade-art.cjs 使用浏览器 Canvas：裁掉透明边、弯刃�
 用户认为程序魔爪 / 地刺与法阵不好看、不明显后，新增 source/scythe-claw-generated.png 和 source/scythe-vfx-generated.png，均为1536×1024透明生成原稿，未使用网页参考图作为输入。前者3列×2行：初露 / 半升 / 张爪 / 抓握 / 回落 / 消失；后者为粗亮双圈符文阵、地裂、三刃旋风、全高与半高骨刺、冲击环。原稿保持不改。
 
 prepare-scythe-vfx.cjs 以 Canvas 固定格裁切，魔爪各格保持同一根部基线，地刺按相位处理为五帧；最近邻、alpha150硬透明、RGB17级距量化输出 scythe-vfx.png（576×448）与 scythe-vfx-frames.json。运行前校验15帧名 / 尺寸 / 边界，整组覆盖原图集；原稿不进包，scytheVfxReady可检查解码状态，程序绘制仅为后备。符文比初版加粗提亮，预兆时基本亮度提高；独立小阵、大招总阵、地裂、旋风与冲击使用固定Sprite池，暂停 / 重开不改变伤害规则。
+
+
+## 炎剑特效、NPC站立与圣域重像素化（2026-11-11最新）
+
+source/flame-vfx-generated.png（1086×1448，3列4行）为新生成的六帧焰潮、三种流焰重斩、三帧火焰护体。source/sanctuary-npcs-generated.png（1774×887，4列2行）为圣使 / 神父各4帧站立原稿，source/sacred-grove-generated.png（1536×1024）为独立神树与祭坛。全部原创生成，没有下载现成游戏素材；原稿保持不动。
+
+prepare-flame-sanctuary.cjs使用浏览器Canvas固定格裁切，火焰最近邻 / alpha160硬透明 / RGB17级距量化，输出flame-vfx.png（576×336）。NPC每一行共用裁切边界，保持脚底固定；NPC和地标先以半分辨率绘制，匹配32种苔绿 / 灰石 / 象牙 / 旧金地图色，再2倍最近邻放大，输出sanctuary-generated.png（512×528）。神树裁切剔除右下邻列祭坛残边。各自*-frames.json记录布局，运行前全帧尺寸校验后覆盖原图集，失败保留程序后备。旧trees-generated.png / grove-trees.png仍仅历史存档，新运行使用本节的新素材；原稿不进包。
+
+
+## 圣域广场与教堂整体重建（最新）
+
+新增source/sanctum-props-rebuilt.png（新树 / 祭坛）、sanctum-terrain-generated.png（石板 / 苔草 / 路 / 根床 / 花石）、cathedral-exterior-generated.png（完整教堂）、cathedral-interior-generated.png（内部地板 / 四家具 / 太阳镶嵌），全部原创生成，无下载外部游戏素材。prepare-sanctum-rebuild.cjs保留原稿，以Canvas固定分区裁切 / 白色边缘连通背景剔除 / 半尺寸 / 46色 / alpha180硬透明 / 2倍最近邻输出sanctum-rebuilt.png（1024×1120）。*-frames.json记录15帧布局；写出前做全切片矩形不相交检查，避免柱子覆盖祭坛切片。旧圣域图仅保留历史，NPC四帧仍使用前一版本生成图。
+
+运行最后覆盖同尺寸教堂 / 树 / 家具帧，四地面32×32、根床256×128、低花石96×48、镶嵌128×128进入同一图集。地面在场景创建时烘焙，没有新增运行时下载。树 / 祭坛不再使用夸张通用阴影，旧树脚金色椭圆环也删除；橄榄叶色偏向地图苔绿，象牙树干和金饰保留。炎躯Back / Front由现有三帧生成护体图按行86分离，像素不重绘，附着角色并保留头脸可见。

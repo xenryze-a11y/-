@@ -1537,18 +1537,20 @@ test('each spike arm stops at a wall and its damage cannot leak through that wal
   bladeSteps(c, 2);
   assert.equal(c.s.health.get(hidden)!.hp, 1000);
 });
-test('flame wave pierces each visible enemy once, ignites targets and sweeps against walls without tunneling', () => {
+test('five flame waves each pierce an enemy once, ignite targets and sweep against walls without tunneling', () => {
   const c = arena();
   equipBlade(c, 'greatsword');
   c.s.facing.get(c.player)!.angle = 0;
   const first = mob(c, 675, 600, 1000),
     second = mob(c, 755, 620, 1000);
   castStaffAbility(c, 'field');
-  bladeSteps(c, 0.7);
+  bladeSteps(c, 0.05);
   assert.equal(c.s.health.get(first)!.hp, 970);
-  assert.equal(c.s.health.get(second)!.hp, 970);
+  assert.equal(c.s.health.get(second)!.hp, 1000);
   assert.ok(c.s.mob.get(first)!.burn! > 0);
-  bladeSteps(c, 1);
+  bladeSteps(c, 1.75);
+  assert.equal(c.s.health.get(first)!.hp, 850);
+  assert.equal(c.s.health.get(second)!.hp, 850);
   assert.equal(c.s.flameWave.length, 0);
   const d = arena();
   equipBlade(d, 'greatsword');
@@ -1589,25 +1591,25 @@ test('three flowing cleaves occur at distinct times with a locked cast direction
   bladeSteps(c, 1);
   assert.equal(c.s.blade.get(c.player)!.comboLeft, 0);
 });
-test('inferno is a real six-second self buff with boosted sword damage and incoming reduction after switching', () => {
+test('inferno is a real seven-second self buff with boosted sword damage and incoming reduction after switching', () => {
   const c = arena();
   equipBlade(c, 'greatsword');
   c.s.facing.get(c.player)!.angle = 0;
   const enemy = mob(c, 655, 600, 1000);
   castStaffAbility(c, 'barrage');
-  assert.equal(c.s.blade.get(c.player)!.infernoLeft, 6);
+  assert.equal(c.s.blade.get(c.player)!.infernoLeft, 7);
   castSelected(c);
   assert.equal(c.s.health.get(enemy)!.hp, 951);
   equipBlade(c, 'sabre');
   applyDamage(c, c.player, 20, 0);
-  assert.equal(c.s.health.get(c.player)!.hp, 104);
+  assert.equal(c.s.health.get(c.player)!.hp, 224);
   bladeSteps(c, 0.5);
   assert.ok(c.s.health.get(enemy)!.hp < 951);
-  bladeSteps(c, 6);
+  bladeSteps(c, 7);
   assert.equal(c.s.blade.get(c.player)!.infernoLeft, 0);
   player(c).invuln = 0;
   applyDamage(c, c.player, 20, 0);
-  assert.equal(c.s.health.get(c.player)!.hp, 84);
+  assert.equal(c.s.health.get(c.player)!.hp, 92);
 });
 test('a released Q touch edge aims the directional flame wave at the supplied target', () => {
   const c = arena();
@@ -1628,4 +1630,133 @@ test('a released Q touch edge aims the directional flame wave at the supplied ta
   assert.ok(Math.abs(c.s.flameWave.data[0].vx) < 0.001);
   assert.ok(c.s.flameWave.data[0].vy > 0);
   assert.deepEqual(JSON.parse(JSON.stringify(c.s.blade.data)), c.s.blade.data);
+});
+
+test('five-wave burst locks direction, follows the caster origin and completes after switching weapons', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  castStaffAbility(c, 'field');
+  assert.equal(c.s.flameWave.length, 1);
+  assert.equal(c.s.blade.get(c.player)!.waveLeft, 4);
+  assert.equal(player(c).mana, 82);
+  equipBlade(c, 'sabre');
+  c.s.facing.get(c.player)!.angle = Math.PI;
+  c.world.setPos(c.player, { x: 604, y: 610 });
+  bladeSteps(c, 0.19);
+  assert.equal(c.s.flameWave.length, 2);
+  assert.ok(c.s.flameWave.data.every((w) => w.vx === 270 && w.vy === 0));
+  assert.ok(c.s.flameWave.owners.some((id) => c.world.pos(id).y === 610));
+  bladeSteps(c, 0.6);
+  assert.equal(c.s.flameWave.length, 5);
+  assert.equal(c.s.blade.get(c.player)!.waveLeft, 0);
+  assert.equal(
+    c.world
+      .drain()
+      .filter((e) => e.kind === 'bladeArt' && e.ability === 'waveCast').length,
+    5,
+  );
+  bladeSteps(c, 1.1);
+  assert.equal(c.s.flameWave.length, 0);
+});
+test('five-wave capacity is reserved atomically and pending bursts cannot be overwritten', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  castStaffAbility(c, 'field');
+  const state = c.s.blade.get(c.player)!;
+  state.schools.greatsword.cooldowns.field = 0;
+  const mana = player(c).mana;
+  castStaffAbility(c, 'field');
+  assert.equal(player(c).mana, mana);
+  assert.equal(state.waveLeft, 4);
+  assert.equal(c.s.flameWave.length, 1);
+  bladeSteps(c, 0.75);
+  state.schools.greatsword.cooldowns.field = 0;
+  assert.equal(c.s.flameWave.length, 5);
+  const before = player(c).mana;
+  castStaffAbility(c, 'field');
+  assert.equal(player(c).mana, before);
+  assert.equal(state.schools.greatsword.cooldowns.field, 0);
+  assert.equal(c.s.flameWave.length, 5);
+});
+
+test('inferno doubles current and maximum health once and expires proportionally after seven seconds', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  const hp = c.s.health.get(c.player)!,
+    state = c.s.blade.get(c.player)!;
+  hp.hp = 60;
+  castStaffAbility(c, 'barrage');
+  assert.equal(hp.max, 240);
+  assert.equal(hp.hp, 120);
+  assert.equal(state.infernoLeft, 7);
+  state.schools.greatsword.cooldowns.barrage = 0;
+  player(c).mana = 100;
+  castStaffAbility(c, 'barrage');
+  assert.equal(hp.max, 240);
+  assert.equal(hp.hp, 120);
+  applyDamage(c, c.player, 20, 0);
+  assert.equal(hp.hp, 104);
+  bladeSteps(c, 6.9);
+  assert.equal(hp.max, 240);
+  assert.equal(state.infernoVitality, true);
+  bladeSteps(c, 0.12);
+  assert.equal(hp.max, 120);
+  assert.equal(hp.hp, 52);
+  assert.equal(state.infernoVitality, false);
+});
+test('level growth during doubled vitality survives expiration without losing base health upgrades', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  const hp = c.s.health.get(c.player)!;
+  hp.hp = 50;
+  castStaffAbility(c, 'barrage');
+  grantXp(c, 40);
+  assert.equal(hp.max, 252);
+  assert.equal(hp.hp, 112);
+  bladeSteps(c, 7.1);
+  assert.equal(hp.max, 126);
+  assert.equal(hp.hp, 56);
+  const d = arena();
+  equipBlade(d, 'greatsword');
+  castStaffAbility(d, 'barrage');
+  d.s.health.get(d.player)!.hp = 0;
+  updateBlades(d, 7.1);
+  assert.equal(d.s.health.get(d.player)!.hp, 0);
+  assert.equal(d.s.health.get(d.player)!.max, 120);
+});
+test('five waves are paired with five timed sword swings, and active swings cannot be interrupted by a cleave', () => {
+  const c = arena();
+  equipBlade(c, 'greatsword');
+  c.s.facing.get(c.player)!.angle = 0;
+  castStaffAbility(c, 'field');
+  const state = c.s.blade.get(c.player)!;
+  assert.equal(state.waveSwingIndex, 0);
+  assert.equal(player(c).attackAnim, 0.16);
+  assert.equal(player(c).castAnim, 0);
+  const mana = player(c).mana;
+  castStaffAbility(c, 'wave');
+  assert.equal(player(c).mana, mana);
+  assert.equal(state.comboLeft, 0);
+  for (let i = 1; i < 5; i++) {
+    bladeSteps(c, 0.18);
+    assert.equal(state.waveSwingIndex, i);
+    assert.ok(state.waveSwingLeft > 0);
+    assert.equal(player(c).swingAngle, 0);
+  }
+  const events = c.world.drain();
+  assert.equal(
+    events.filter((e) => e.kind === 'bladeArt' && e.ability === 'fireSlash')
+      .length,
+    5,
+  );
+  assert.equal(
+    events.filter((e) => e.kind === 'bladeArt' && e.ability === 'waveCast')
+      .length,
+    5,
+  );
+  bladeSteps(c, 0.2);
+  assert.equal(state.waveSwingLeft, 0);
+  castStaffAbility(c, 'wave');
+  assert.ok(state.comboLeft > 0);
 });

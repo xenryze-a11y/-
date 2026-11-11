@@ -73,7 +73,8 @@ export function groveClearance(x: number, y: number): boolean {
   return (
     onCathedral({ x, y }, 80) ||
     (x > GROVE.oldWidth * TILE &&
-      (Math.hypot(x - GROVE.altar.x, y - GROVE.altar.y) < 220 ||
+      (((x / 32 - 60.5) / 8) ** 2 + ((y / 32 - 22) / 10) ** 2 < 1.15 ||
+        Math.hypot(x - GROVE.altar.x, y - GROVE.altar.y) < 220 ||
         Math.hypot(x - GROVE.tree.x, y - GROVE.tree.y) < 175 ||
         Math.abs(y - 24 * 32) < 60 ||
         (Math.abs(x - 60.5 * 32) < 64 && y > 26 * 32)))

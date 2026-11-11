@@ -20,7 +20,7 @@ export const BLOCK_RIG = {
   hipY: -14,
   armLength: 14,
   legLength: 14,
-  weaponScale: 0.74,
+  weaponScale: 0.88,
   headY: -31,
   stride: 2.4,
   lift: 1.5,

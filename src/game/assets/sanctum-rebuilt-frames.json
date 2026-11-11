@@ -1,0 +1,92 @@
+{
+  "cathedralRoof": {
+    "x": 0,
+    "y": 0,
+    "w": 544,
+    "h": 864
+  },
+  "cathedralInterior": {
+    "x": 544,
+    "y": 0,
+    "w": 480,
+    "h": 704
+  },
+  "propAncientTree": {
+    "x": 544,
+    "y": 704,
+    "w": 320,
+    "h": 352
+  },
+  "propAltar": {
+    "x": 864,
+    "y": 704,
+    "w": 128,
+    "h": 96
+  },
+  "groundSacredRoots": {
+    "x": 0,
+    "y": 864,
+    "w": 256,
+    "h": 128
+  },
+  "groundSacredGarden": {
+    "x": 256,
+    "y": 864,
+    "w": 96,
+    "h": 48
+  },
+  "tileSanctumPave0": {
+    "x": 352,
+    "y": 864,
+    "w": 32,
+    "h": 32
+  },
+  "tileSanctumPave1": {
+    "x": 384,
+    "y": 864,
+    "w": 32,
+    "h": 32
+  },
+  "tileSanctumGrass": {
+    "x": 416,
+    "y": 864,
+    "w": 32,
+    "h": 32
+  },
+  "tileSanctumPath": {
+    "x": 448,
+    "y": 864,
+    "w": 32,
+    "h": 32
+  },
+  "propChurchPew": {
+    "x": 864,
+    "y": 800,
+    "w": 88,
+    "h": 44
+  },
+  "propChurchColumn": {
+    "x": 960,
+    "y": 800,
+    "w": 40,
+    "h": 104
+  },
+  "propChurchCandles": {
+    "x": 992,
+    "y": 904,
+    "w": 32,
+    "h": 48
+  },
+  "propChurchAltar": {
+    "x": 864,
+    "y": 944,
+    "w": 112,
+    "h": 72
+  },
+  "groundSacredMosaic": {
+    "x": 0,
+    "y": 992,
+    "w": 128,
+    "h": 128
+  }
+}

@@ -168,3 +168,9 @@ InventoryState 新增 armor.head / chest / legs，保留 boots、合成与36格�
 `BladeState` 保存魔镰 / 炎剑各自三项冷却、风暴和炎躯计时，以及锁定方向的三斩进度；`RiftStrike` 保存预兆 / 破土 / 命中 / 消退时间；`RiftGroup.hit` 使同次十字地刺对每敌只命中一次；`FlameWave` 保存扫掠速度和穿透去重。`updateBlades` 位于 staffArts 之后、summons 之前，不依赖 Pixi 或动画回调。换武器不取消已释放效果，暂停冻结整条模拟链。上限 rift40 / group4 / wave8，超额不扣蓝。
 
 InventoryCommand 的 `equip` 是守恒交换：只选择已持有武器，若在存储区则与当前快捷格交换；手持光标有物品时拒绝。UI 的三个试玩换装按钮不创造物品。弯刃没有职业或主动技能。
+
+
+炎剑焰潮现在是5波连发：BladeState.waveLeft / waveTick / waveAngle / waveMultiplier记录尚未发射的波数、间隔、锁定方向和施法倍率。施法时预留完整5波容量（maxWaves8），有未完成连发或容量不足则原子拒绝，不扣法力、不启动冷却；首波立即，随后4波由updateBlades每0.18秒推进。各波独立穿透去重、墙体扫掠、到期删除；换武器后继续，暂停冻结，不使用浏览器定时器。
+
+
+炎剑新增waveSwingLeft / waveSwingIndex，使每波都配一次0.16秒自动挥击，共5次 / 每0.18秒交替；普通攻击 / F不能中断未完成的同武器挥击，换武器已释放波仍完成。infernoVitality标记当前生命 / 上限是否已翻倍，7秒到期以当前比例缩回，不叠乘、不恢复旧血量、不复活；升级时生命成长按同一倍率计入，结束后保留完整基础升级。伤害与灼烧规则不交给视觉帧。

@@ -47,48 +47,6 @@ function dot(
       alpha,
     });
 }
-function line(
-  g: Graphics,
-  x: number,
-  y: number,
-  xx: number,
-  yy: number,
-  color: number,
-  alpha = 1,
-  width = 2,
-): void {
-  const n = Math.max(1, Math.ceil(Math.hypot(xx - x, yy - y) / 3));
-  for (let i = 0; i <= n; i++)
-    dot(g, x + ((xx - x) * i) / n, y + ((yy - y) * i) / n, width, color, alpha);
-}
-function ring(
-  g: Graphics,
-  x: number,
-  y: number,
-  r: number,
-  color: number,
-  alpha: number,
-  phase = 0,
-  ratio = 0.62,
-): void {
-  const count = Math.min(160, Math.max(30, Math.ceil(r * 2)));
-  for (let i = 0; i < count; i++) {
-    const a = (i / count) * Math.PI * 2 + phase;
-    dot(g, x + Math.cos(a) * r, y + Math.sin(a) * r * ratio, 2, color, alpha);
-  }
-}
-function flame(
-  g: Graphics,
-  x: number,
-  y: number,
-  h: number,
-  t: number,
-  alpha: number,
-): void {
-  line(g, x - 2, y, x + Math.sin(t) * 3, y - h, F.dark, alpha, 7);
-  line(g, x, y, x + Math.sin(t) * 2, y - h * 0.8, F.light, alpha, 4);
-  dot(g, x, y - h * 0.22, 2, F.core, alpha);
-}
 function arc(
   g: Graphics,
   x: number,
@@ -126,6 +84,8 @@ export class BladeVfx {
   private readonly groupSigils: { root: Container; circle: Sprite }[] = [];
   private readonly impacts: Sprite[] = [];
   private readonly orbiters: Sprite[] = [];
+  private readonly fireSlashes: Sprite[] = [];
+  private infernoActive = false;
   private readonly comboGhosts: Sprite[] = [];
   private bursts: Burst[] = [];
   private particles: Particle[] = [];
@@ -171,6 +131,13 @@ export class BladeVfx {
       this.sigils.push({ id: 0, root, circle, cracks });
     }
     airLayer.addChild(this.air);
+    for (let i = 0; i < 6; i++) {
+      const s = new Sprite(atlas.get('bladeFlameSlash_0'));
+      s.anchor.set(0.5);
+      s.visible = false;
+      airLayer.addChild(s);
+      this.fireSlashes.push(s);
+    }
     for (let i = 0; i < 3; i++) {
       const s = new Sprite(atlas.get('weaponScythe'));
       s.anchor.set(
@@ -202,6 +169,8 @@ export class BladeVfx {
       stormRings: this.stormRoot.visible ? 1 : 0,
       groupSigils: this.groupSigils.filter((s) => s.root.visible).length,
       impacts: this.impacts.filter((s) => s.visible).length,
+      fireSlashes: this.fireSlashes.filter((s) => s.visible).length,
+      inferno: this.infernoActive ? 1 : 0,
     };
   }
   private particle(p: Particle): void {
@@ -325,34 +294,7 @@ export class BladeVfx {
       slot.cracks.rotation = id * 2.399;
       slot.cracks.visible = r.age >= r.windup - 0.1;
     });
-    if (state.infernoLeft > 0) {
-      const alpha = Math.min(1, state.infernoLeft * 2);
-      ring(this.ground, at.x, at.y, M.inferno.radius, F.mid, alpha * 0.5);
-      for (let i = 0; i < 12; i++) {
-        const a = (i * Math.PI) / 6 + t * 0.5;
-        flame(
-          this.air,
-          at.x + Math.cos(a) * 32,
-          at.y + Math.sin(a) * 17,
-          9 + Math.sin(t * 7 + i) * 5,
-          t * 8 + i,
-          alpha * 0.8,
-        );
-      }
-      for (let i = 0; i < 7; i++) {
-        const a = i * 2.399 + t;
-        dot(
-          this.air,
-          at.x + Math.cos(a) * 16,
-          at.y - ((t * 38 + i * 9) % 58),
-          2,
-          i % 2 ? F.light : F.core,
-          alpha * 0.85,
-        );
-      }
-      flame(this.air, at.x - 11, at.y - 18, 20, t * 9, alpha * 0.7);
-      flame(this.air, at.x + 11, at.y - 18, 20, t * 9 + 2, alpha * 0.7);
-    }
+    this.infernoActive = state.infernoLeft > 0;
     const alive = new Set<number>();
     scene.s.flameWave.forEach((id, w) => {
       if (scene.world.isPendingDeath(id)) return;
@@ -383,7 +325,9 @@ export class BladeVfx {
       if (!alive.has(id)) this.trails.delete(id);
     this.comboGhosts.forEach((s) => (s.visible = false));
     let ghost = 0,
-      impact = 0;
+      impact = 0,
+      fireSlash = 0;
+    this.fireSlashes.forEach((s) => (s.visible = false));
     this.impacts.forEach((s) => (s.visible = false));
     for (const b of this.bursts) {
       b.age += dt;
@@ -395,49 +339,18 @@ export class BladeVfx {
           reverse = index === 1,
           span = M.combo.arc[index],
           a = b.angle + (reverse ? 1 : -1) * (0.5 - f) * span;
-        arc(
-          this.air,
-          b.x,
-          b.y - 12,
-          b.radius,
-          b.angle,
-          span,
-          F.dark,
-          alpha * 0.7,
-          10,
-        );
-        arc(
-          this.air,
-          b.x,
-          b.y - 12,
-          b.radius - 3,
-          b.angle + (reverse ? 1 : -1) * f * 0.12,
-          span,
-          F.light,
-          alpha,
-          4,
-        );
-        arc(
-          this.air,
-          b.x,
-          b.y - 12,
-          b.radius - 6,
-          b.angle,
-          span,
-          F.core,
-          alpha * 0.8,
-          2,
-        );
-        for (let i = 0; i < 9; i++) {
-          const aa = b.angle - span / 2 + (i / 8) * span;
-          flame(
-            this.air,
-            b.x + Math.cos(aa) * b.radius,
-            b.y - 12 + Math.sin(aa) * b.radius * 0.72,
-            8 + alpha * 12,
-            t * 9 + i,
-            alpha * 0.7,
+        const slash = this.fireSlashes[fireSlash++];
+        if (slash) {
+          slash.visible = true;
+          slash.texture = this.atlas.get('bladeFlameSlash_' + index);
+          slash.position.set(
+            b.x + Math.cos(b.angle) * b.radius * 0.25,
+            b.y - 12 + Math.sin(b.angle) * b.radius * 0.18,
           );
+          slash.rotation = b.angle + (reverse ? -1 : 1) * (f - 0.5) * 0.25;
+          const scale = ((b.radius * 1.5) / 128) * (0.85 + f * 0.2);
+          slash.scale.set(scale, scale * 0.8);
+          slash.alpha = alpha * 0.95;
         }
         if (ghost < 3) {
           const s = this.comboGhosts[ghost++];
@@ -458,11 +371,7 @@ export class BladeVfx {
           sprite.rotation = 0;
           sprite.alpha = alpha * 0.95;
         }
-      } else if (
-        b.kind === 'sabreSlash' ||
-        b.kind === 'scytheSlash' ||
-        b.kind === 'fireSlash'
-      ) {
+      } else if (b.kind === 'sabreSlash' || b.kind === 'scytheSlash') {
         const c =
           b.kind === 'sabreSlash'
             ? 0xcce8de
@@ -480,19 +389,22 @@ export class BladeVfx {
           alpha * 0.65,
           b.kind === 'sabreSlash' ? 2 : 4,
         );
-      } else if (b.kind === 'waveImpact') {
-        ring(this.ground, b.x, b.y, 10 + f * b.radius, F.light, alpha);
-        for (let i = 0; i < 5; i++)
-          flame(
-            this.air,
-            b.x + (i - 2) * 9,
-            b.y - 5,
-            25 * alpha,
-            t * 6 + i,
-            alpha,
+      } else if (b.kind === 'waveImpact' || b.kind === 'fireSlash') {
+        const slash = this.fireSlashes[fireSlash++];
+        if (slash) {
+          slash.visible = true;
+          slash.texture = this.atlas.get(
+            'bladeFlameSlash_' + (b.kind === 'fireSlash' ? 0 : 2),
           );
-      } else if (b.kind === 'infernoCast') {
-        ring(this.ground, b.x, b.y, 10 + f * 60, F.core, alpha * 0.7);
+          slash.position.set(
+            b.x + Math.cos(b.angle) * b.radius * 0.2,
+            b.y - 10 + Math.sin(b.angle) * b.radius * 0.15,
+          );
+          slash.rotation = b.angle;
+          const scale = ((b.radius * 1.7) / 128) * (0.7 + f * 0.5);
+          slash.scale.set(scale, scale * 0.8);
+          slash.alpha = alpha * 0.85;
+        }
       }
     }
     this.bursts = this.bursts.filter((b) => b.age < b.life);
@@ -515,6 +427,8 @@ export class BladeVfx {
       slot.root.visible = false;
     }
     this.stormRoot.visible = false;
+    this.infernoActive = false;
+    this.fireSlashes.forEach((s) => (s.visible = false));
     this.groupSigils.forEach((s) => (s.root.visible = false));
     this.impacts.forEach((s) => (s.visible = false));
     this.time = 0;

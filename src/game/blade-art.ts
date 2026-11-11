@@ -509,6 +509,67 @@ function crackArt(p: Painter): void {
 }
 export function bladeSpecs(): Spec[] {
   const out: Spec[] = [
+    ...Array.from({ length: 3 }, (_, i) =>
+      ['Back', 'Front'].map((part) => ({
+        name: 'bladeInferno' + part + '_' + i,
+        w: 128,
+        h: 128,
+        draw: (p: Painter) => {
+          p.ctx.save();
+          p.ctx.beginPath();
+          p.ctx.rect(
+            0,
+            part === 'Back' ? 0 : 86,
+            128,
+            part === 'Back' ? 86 : 42,
+          );
+          p.ctx.clip();
+          p.ring(64, 94, 46, 4, F.light);
+          for (let k = 0; k < 12; k++) {
+            const a = (k * Math.PI) / 6;
+            p.line(
+              64 + Math.cos(a) * 45,
+              94 + Math.sin(a) * 20,
+              64 + Math.cos(a) * 45,
+              60 + Math.sin(a) * 20 + i * 2,
+              F.mid,
+              5,
+            );
+          }
+          p.ctx.restore();
+        },
+      })),
+    ).flat(),
+    ...Array.from({ length: 3 }, (_, i) => ({
+      name: 'bladeFlameSlash_' + i,
+      w: 128,
+      h: 128,
+      draw: (p: Painter) => {
+        p.ctx.save();
+        p.ctx.scale(1.3, 1.6);
+        wave(p, i);
+        p.ctx.restore();
+      },
+    })),
+    ...Array.from({ length: 3 }, (_, i) => ({
+      name: 'bladeInferno_' + i,
+      w: 128,
+      h: 128,
+      draw: (p: Painter) => {
+        p.ring(64, 94, 46, 4, F.light);
+        for (let k = 0; k < 12; k++) {
+          const a = (k * Math.PI) / 6;
+          p.line(
+            64 + Math.cos(a) * 45,
+            94 + Math.sin(a) * 20,
+            64 + Math.cos(a) * 45,
+            60 + Math.sin(a) * 20 + i * 2,
+            F.mid,
+            5,
+          );
+        }
+      },
+    })),
     {
       name: 'eldritchStorm',
       w: 192,
