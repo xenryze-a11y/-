@@ -20,6 +20,8 @@ import { tickTimers } from './game/systems/timers';
 import { updateAI } from './game/systems/ai';
 import { updateProjectiles } from './game/systems/projectile';
 import { updateFields, castSelected } from './game/systems/magic';
+import { updateStaffArts } from './game/systems/staff-arts';
+import { castStaffAbility } from './game/systems/profession';
 import { updateMage, castMage } from './game/systems/mage';
 import { GROVE } from './game/mage-data';
 import type { MageSkillId } from './game/mage-data';
@@ -157,33 +159,14 @@ async function boot(): Promise<void> {
         updateProjectiles(ctx, _fixed);
         updateFields(ctx, _fixed);
         updateMage(ctx, _fixed);
+        updateStaffArts(ctx, _fixed);
         updateSummons(ctx, _fixed);
         updateRules(ctx);
         ctx.world.flush();
       });
-      const playerAt = ctx.world.pos(ctx.player),
-        groveView = playerAt.x > 48 * 32;
-      camera.zoom = groveView
-        ? innerWidth < 600
-          ? 1.1
-          : GROVE.cameraZoom
-        : innerWidth < 600
-          ? 1.75
-          : CFG.camera.zoom;
-      // 矮屏优先给角色和战斗 HUD 留空间，林地高屏才拉开古树全景。
-      const lookAhead = groveView
-        ? Math.min(
-            innerWidth < 600 ? 135 : 140,
-            Math.max(20, (app.screen.height / 2 - 250) / camera.zoom),
-          )
-        : 0;
-      camera.follow(
-        {
-          x: playerAt.x,
-          y: playerAt.y - lookAhead,
-        },
-        realDT,
-      );
+      const playerAt = ctx.world.pos(ctx.player);
+      camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+      camera.follow(playerAt, realDT);
       camera.update(realDT);
       present.update(realDT);
       present.sync(scene, realDT);
@@ -236,6 +219,7 @@ async function boot(): Promise<void> {
       inventory: setInventory,
       cast: (special = false) => castSelected(ctx, special),
       mage: (ability: MageSkillId) => castMage(ctx, ability),
+      staff: (ability: MageSkillId) => castStaffAbility(ctx, ability),
     },
     get world() {
       return ctx.world;

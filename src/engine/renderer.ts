@@ -593,6 +593,28 @@ export class WorldView {
       );
       return;
     }
+    const meteor = s.meteor.get(e);
+    if (meteor) {
+      sprite.texture = this.atlas.get('artMeteor');
+      sprite.anchor.set(0.5, 1);
+      sprite.y = -6 - Math.max(0, meteor.delay / meteor.maxDelay) * 130;
+      sprite.rotation = 0;
+      sprite.scale.set(1);
+      return;
+    }
+    const art = s.staffShot.get(e);
+    if (art) {
+      sprite.texture = this.atlas.get(
+        art.style === 'lance'
+          ? 'artFlameLance'
+          : `missile_${art.school}_${Math.floor(this.renderTime * PIXEL_FX.fps) % PIXEL_FX.projectileFrames}`,
+      );
+      sprite.anchor.set(0.5);
+      sprite.y = -12;
+      sprite.rotation = art.style === 'star' ? 0 : Math.atan2(art.vy, art.vx);
+      sprite.scale.set(art.style === 'star' ? 1.1 : 1.25);
+      return;
+    }
     const pr = s.projectile.get(e);
     if (pr) {
       const anim = FX_ANIMS[pr.kind];

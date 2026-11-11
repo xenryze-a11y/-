@@ -111,4 +111,6 @@ npm run typecheck && npm test && npm run build && npm run build:standalone
 
 ## 雷电法师与林地
 
-菜单「探索古树祭坛」便于直接试玩新区域，向祭坛走近取得雷电法杖后解锁。Q 电场、F / 右键五段震荡、R 身后连射 + 周身高速环绕；其他武器的 F / 武技保留。职业状态在 `s.mage`，波列在 `s.wave`，`updateMage` 插在 fields 之后、summons 之前。UI 不写冷却，环形 SVG 只读取剩余 / 总冷却。普通 / 巨树与图标原稿在 `assets/source`，运行时仅内嵌规范化小图。详见 [STORM_MAGE.md](STORM_MAGE.md)。
+菜单「探索古树祭坛」便于直接试玩新区域，向祭坛走近取得雷电法杖后解锁。Q 电场、F / 右键五段震荡、R 身后连射 + 周身高速环绕；其余四根法杖也各有三种职业技能，长剑与篮球的 F / 武技保留。职业状态在 `s.mage`，波列在 `s.wave`，`updateMage` 处理雷电，随后 `updateStaffArts` 处理四系区域、弹道、陨石和灼烧，再运行 summons。UI 不写冷却，环形 SVG 只读取剩余 / 总冷却。普通 / 巨树与图标原稿在 `assets/source`，运行时仅内嵌规范化小图。详见 [STORM_MAGE.md](STORM_MAGE.md)。
+
+五系内容入口：`staff-data.ts` → `systems/profession.ts / staff-arts.ts` → `staff-arts-vfx.ts / staff-art.ts`。新图标以 CPU Canvas 截图传给 DOM，技能按钮共用真实冷却数据；技能与辅助键均无外部大框。祭坛和原区域相机倍率 / 高度相同。完整内容表见 [STAFF_PROFESSIONS.md](STAFF_PROFESSIONS.md)。

@@ -7,6 +7,7 @@
  */
 import { Rectangle, Texture } from 'pixi.js';
 import { buildProceduralAtlas, type AtlasFrame, type BuiltAtlas } from './art';
+import { applyStaffArt } from '../game/staff-art';
 import { applyGroveArt } from '../game/grove-art';
 import { applyBasketballAssets } from '../game/basketball-assets';
 import { applyGeneratedStaves } from '../game/generated-staves';
@@ -66,6 +67,7 @@ export class TextureAtlas {
   readonly generatedStaves: boolean;
   readonly basketballAssetsReady: boolean;
   readonly groveArtReady: boolean;
+  readonly staffArtReady: boolean;
   readonly sourceKind: 'procedural' | 'external';
   private readonly textures = new Map<string, Texture>();
 
@@ -75,6 +77,7 @@ export class TextureAtlas {
     generatedStaves = false,
     basketballAssetsReady = false,
     groveArtReady = false,
+    staffArtReady = false,
   ) {
     this.canvas = built.canvas;
     this.frames = built.frames;
@@ -82,6 +85,7 @@ export class TextureAtlas {
     this.generatedStaves = generatedStaves;
     this.basketballAssetsReady = basketballAssetsReady;
     this.groveArtReady = groveArtReady;
+    this.staffArtReady = staffArtReady;
     const base = Texture.from(this.canvas);
     // 像素画必须最近邻，否则放大 2 倍会糊成一团。
     base.source.style.scaleMode = 'nearest';
@@ -103,6 +107,7 @@ export class TextureAtlas {
     const generated = await applyGeneratedStaves(built);
     const basketballReady = await applyBasketballAssets(built);
     const groveReady = await applyGroveArt(built);
+    const staffReady = await applyStaffArt(built);
     if (
       external &&
       Object.entries(built.frames).every(
@@ -125,6 +130,7 @@ export class TextureAtlas {
       generated,
       basketballReady,
       groveReady,
+      staffReady,
     );
   }
 

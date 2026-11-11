@@ -24,3 +24,7 @@
 ## 古树和雷电职业图标
 
 `source/trees-generated.png`、`source/mage-icons-generated.png` 为本轮新生成的像素原稿，分别包含普通 / 巨大古树与电场 / 五段震荡 / 连射环绕大招三图标。没有使用游戏品牌 Logo 或下载现成技能图片。`grove-trees.png`、`mage-icons.png` 是供运行时内嵌的小图；生成原稿不进入运行包。规范化脚本为 `scripts/prepare-grove-art.cjs`，使用浏览器 Canvas 最近邻缩放、硬透明与限制色阶；默认构建不依赖该脚本。内容与切片约定见 [STORM_MAGE.md](../../../docs/STORM_MAGE.md)。
+
+## 四系十二技能图标
+
+`source/all-staff-icons-generated.png` 是新生成的 1448×1086 像素原稿，列为 ember / frost / ward / blink，行为 Q / F / R。`scripts/prepare-staff-icons.cjs` 通过浏览器 Canvas 最近邻、硬透明和 17 级距量化得到 `staff-icons.png`（256×192）。原稿不进运行包；图标在 `staff-art.ts` 合入唯一图集，十二帧与原雷电三帧共组成十五技能。未声称来自尚未确认的魔女 RPG。

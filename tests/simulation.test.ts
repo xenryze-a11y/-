@@ -778,3 +778,311 @@ test('a short touch skill tap still aims at the supplied target after its pointe
   assert.equal(c.s.wave.data[0].angle, 0);
   assert.ok(c.s.mage.get(c.player)!.cooldowns.wave > 0);
 });
+
+// 新职业覆盖真正的伤害、碰撞、状态和生命周期，避免只验证图标换色。
+import {
+  castStaffAbility,
+  professionState,
+} from '../src/game/systems/profession';
+import {
+  updateStaffArts,
+  syncElementUnlocks,
+} from '../src/game/systems/staff-arts';
+import {
+  ELEMENT_STAVES,
+  STAFF_ARTS,
+  STAFF_PROFESSIONS,
+  staffIconName,
+} from '../src/game/staff-data';
+import type { SkillId } from '../src/game/items';
+function equipStaff(c: Ctx, school: SkillId): void {
+  select(
+    c,
+    inv(c).slots.findIndex((item) => item?.id === school),
+  );
+  c.s.facing.get(c.player)!.angle = 0;
+}
+function artSteps(c: Ctx, seconds: number): void {
+  for (let i = 0; i < Math.ceil(seconds * 60); i++) {
+    tickTimers(c, 1 / 60);
+    updateStaffArts(c, 1 / 60);
+    c.world.flush();
+  }
+}
+test('all five professions share Q/F/R but have fifteen distinct icons and independent cooldowns', () => {
+  const c = arena(),
+    names = new Set<string>();
+  for (const school of SKILL_IDS) {
+    for (const ability of MAGE_IDS_FOR_TEST)
+      names.add(staffIconName(school, ability));
+    equipStaff(c, school);
+    player(c).mana = 100;
+    castStaffAbility(c, 'field');
+    assert.equal(
+      professionState(c, school).cooldowns.field,
+      STAFF_PROFESSIONS[school].skills.field.cooldown,
+    );
+    assert.equal(professionState(c, school).cooldowns.wave, 0);
+  }
+  assert.equal(names.size, 15);
+  equipStaff(c, 'ember');
+  const before = player(c).mana;
+  castStaffAbility(c, 'field');
+  assert.equal(player(c).mana, before);
+  tickTimers(c, 1);
+  assert.equal(professionState(c, 'ember').cooldowns.field, 7);
+  select(c, 5);
+  castStaffAbility(c, 'barrage');
+  assert.equal(professionState(c, 'ember').cooldowns.barrage, 0);
+});
+const MAGE_IDS_FOR_TEST = ['field', 'wave', 'barrage'] as const;
+test('obtaining each staff unlocks permanently even from storage, without selecting an unrelated slot', () => {
+  for (const school of ELEMENT_STAVES) {
+    const c = arena(),
+      state = professionState(c, school);
+    state.unlocked = false;
+    const index = inv(c).slots.findIndex((i) => i?.id === school);
+    inv(c).slots[index] = null;
+    select(c, 5);
+    syncElementUnlocks(c);
+    assert.equal(state.unlocked, false);
+    inv(c).slots[20] = { id: school, count: 1 };
+    syncElementUnlocks(c);
+    assert.equal(state.unlocked, true);
+    assert.equal(inv(c).selected, 5);
+    inv(c).slots[20] = null;
+    syncElementUnlocks(c);
+    assert.equal(state.unlocked, true);
+  }
+});
+test('all new spells reject insufficient mana and capped effects without spending or starting cooldown', () => {
+  for (const school of ELEMENT_STAVES) {
+    const c = arena();
+    equipStaff(c, school);
+    player(c).mana = 0;
+    for (const ability of MAGE_IDS_FOR_TEST) castStaffAbility(c, ability);
+    assert.deepEqual(professionState(c, school).cooldowns, {
+      field: 0,
+      wave: 0,
+      barrage: 0,
+    });
+    assert.equal(c.s.staffZone.length, 0);
+    assert.equal(c.s.staffShot.length, 0);
+  }
+  const c = arena();
+  equipStaff(c, 'frost');
+  for (let i = 0; i < STAFF_ARTS.maxShots; i++) {
+    const id = c.world.createAt([], 0, 0);
+    c.s.staffShot.set(id, {
+      owner: c.player,
+      school: 'frost',
+      style: 'spear',
+      vx: 0,
+      vy: 0,
+      age: 0,
+      life: 1,
+      damage: 1,
+      radius: 5,
+      pierce: 0,
+      hit: [],
+      returning: false,
+      target: 0,
+    });
+  }
+  const mana = player(c).mana;
+  castStaffAbility(c, 'wave');
+  assert.equal(player(c).mana, mana);
+  assert.equal(professionState(c, 'frost').cooldowns.wave, 0);
+});
+test('ember aura follows its owner, burns over time, and never burns through walls', () => {
+  const c = arena();
+  equipStaff(c, 'ember');
+  const enemy = mob(c, 645, 600, 1000);
+  castStaffAbility(c, 'field');
+  updateStaffArts(c, 1 / 60);
+  assert.equal(c.s.health.get(enemy)!.hp, 992);
+  assert.ok(c.s.mob.get(enemy)!.burn! > 0);
+  c.world.setPos(c.player, { x: 600, y: 630 });
+  artSteps(c, 0.6);
+  assert.ok(c.s.health.get(enemy)!.hp < 984);
+  let z = 0;
+  c.s.staffZone.forEach((id) => {
+    z = id;
+  });
+  assert.deepEqual(c.world.pos(z), c.world.pos(c.player));
+  artSteps(c, 7);
+  assert.equal(c.s.staffZone.length, 0);
+  assert.equal(c.s.mob.get(enemy)!.burn, 0);
+  const d = arena();
+  equipStaff(d, 'ember');
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 20] = Tile.WALL;
+  const hidden = mob(d, 680, 600);
+  castStaffAbility(d, 'field');
+  artSteps(d, 2);
+  assert.equal(d.s.health.get(hidden)!.hp, 250);
+  assert.equal(d.s.mob.get(hidden)!.burn || 0, 0);
+});
+test('three fire lances sweep walls, pierce visible targets and ignite them', () => {
+  const c = arena();
+  equipStaff(c, 'ember');
+  const first = mob(c, 660, 600, 1000),
+    second = mob(c, 710, 600, 1000);
+  castStaffAbility(c, 'wave');
+  assert.equal(c.s.staffShot.length, 3);
+  artSteps(c, 0.4);
+  assert.ok(c.s.health.get(first)!.hp < 1000);
+  assert.ok(c.s.health.get(second)!.hp < 1000);
+  assert.ok(c.s.mob.get(second)!.burn! > 0);
+  const d = arena();
+  equipStaff(d, 'ember');
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 20] = Tile.WALL;
+  const hidden = mob(d, 700, 600, 1000);
+  castStaffAbility(d, 'wave');
+  artSteps(d, 2);
+  assert.equal(d.s.health.get(hidden)!.hp, 1000);
+  assert.equal(d.s.staffShot.length, 0);
+});
+test('nine delayed meteors explode once each, leave damaging burn patches, and finish after switching staves', () => {
+  const c = arena();
+  equipStaff(c, 'ember');
+  const enemy = mob(c, 760, 600, 2000);
+  castStaffAbility(c, 'barrage');
+  updateStaffArts(c, 1 / 60);
+  assert.equal(c.s.meteor.length, 1);
+  assert.equal(c.s.health.get(enemy)!.hp, 2000);
+  equipStaff(c, 'frost');
+  artSteps(c, 3.6);
+  const hits = c.world
+    .drain()
+    .filter((e) => e.kind === 'staffArt' && e.ability === 'meteor');
+  assert.equal(hits.length, 9);
+  assert.ok(c.s.health.get(enemy)!.hp < 2000);
+  assert.ok(c.s.staffZone.length > 0);
+  artSteps(c, 4);
+  assert.equal(c.s.meteor.length, 0);
+  assert.equal(c.s.staffZone.length, 0);
+});
+test('frost nova freezes visible enemies; spear pierces a line; blizzard freezes without phantom initial damage', () => {
+  const c = arena();
+  equipStaff(c, 'frost');
+  const first = mob(c, 665, 600, 1000),
+    second = mob(c, 730, 600, 1000);
+  castStaffAbility(c, 'field');
+  assert.equal(c.s.health.get(first)!.hp, 980);
+  assert.equal(c.s.mob.get(first)!.frozen, STAFF_ARTS.frost.freeze);
+  castStaffAbility(c, 'wave');
+  artSteps(c, 0.35);
+  assert.equal(c.s.health.get(first)!.hp, 950);
+  assert.equal(c.s.health.get(second)!.hp, 970);
+  player(c).mana = 100;
+  castStaffAbility(c, 'barrage');
+  assert.equal(c.s.health.get(second)!.hp, 970);
+  assert.equal(c.s.mob.get(second)!.frozen, 1);
+  artSteps(c, 1);
+  assert.ok(c.s.health.get(second)!.hp < 950);
+  artSteps(c, 6);
+  assert.equal(c.s.staffZone.length, 0);
+});
+test('ward shield actually absorbs damage and three stars retarget a vanished enemy', () => {
+  const c = arena();
+  equipStaff(c, 'ward');
+  const hp = c.s.health.get(c.player)!.hp;
+  castStaffAbility(c, 'field');
+  applyDamage(c, c.player, 30, 0);
+  assert.equal(c.s.health.get(c.player)!.hp, hp);
+  assert.equal(player(c).shieldHp, 14);
+  const first = mob(c, 730, 600, 1000);
+  castStaffAbility(c, 'wave');
+  assert.equal(c.s.staffShot.length, 3);
+  const next = mob(c, 755, 620, 1000);
+  c.world.destroy(first);
+  c.world.flush();
+  artSteps(c, 0.9);
+  assert.ok(c.s.health.get(next)!.hp < 1000);
+  artSteps(c, 3);
+  assert.equal(c.s.staffShot.length, 0);
+});
+test('judgment grants a shield and heals only while its owner is inside the field', () => {
+  const c = arena();
+  equipStaff(c, 'ward');
+  c.aimPointer = c.camera.toScreen({ x: 690, y: 600 });
+  const hp = c.s.health.get(c.player)!;
+  hp.hp = 50;
+  const enemy = mob(c, 700, 600, 1000);
+  castStaffAbility(c, 'barrage');
+  artSteps(c, 0.6);
+  assert.ok(hp.hp > 50);
+  assert.equal(player(c).shieldHp, 50);
+  assert.ok(c.s.health.get(enemy)!.hp < 1000);
+  c.world.setPos(c.player, { x: 400, y: 600 });
+  const before = hp.hp;
+  artSteps(c, 1);
+  assert.equal(hp.hp, before);
+  assert.ok(
+    c.world
+      .drain()
+      .filter((e) => e.kind === 'staffArt' && e.ability === 'pillar').length >=
+      3,
+  );
+});
+test('phase blink stops before a wall and emits two separate end pulses without crossing terrain', () => {
+  const c = arena();
+  equipStaff(c, 'blink');
+  for (let y = 0; y < c.level.h; y++)
+    c.level.tiles[y * c.level.w + 20] = Tile.WALL;
+  const hidden = mob(c, 690, 600);
+  castStaffAbility(c, 'field');
+  assert.ok(c.world.pos(c.player).x < 640 - 10);
+  assert.ok(c.world.pos(c.player).x > 600);
+  assert.ok(player(c).invuln > 0);
+  assert.equal(c.s.health.get(hidden)!.hp, 250);
+  assert.equal(
+    c.world
+      .drain()
+      .filter((e) => e.kind === 'staffArt' && e.ability === 'blink').length,
+    2,
+  );
+});
+test('void blades hit once per outward and return leg, then disappear near the owner', () => {
+  const c = arena();
+  equipStaff(c, 'blink');
+  const enemy = mob(c, 690, 600, 1000);
+  castStaffAbility(c, 'wave');
+  artSteps(c, 0.4);
+  assert.equal(c.s.health.get(enemy)!.hp, 976);
+  artSteps(c, 0.65);
+  assert.equal(c.s.health.get(enemy)!.hp, 952);
+  assert.equal(c.s.staffShot.length, 0);
+});
+test('singularity pulls through collision-safe motion, collapses once, and serializes without presentation objects', () => {
+  const c = arena();
+  equipStaff(c, 'blink');
+  const enemy = mob(c, 830, 600, 2000);
+  castStaffAbility(c, 'barrage');
+  artSteps(c, 1);
+  assert.ok(c.world.pos(enemy).x < 800);
+  const before = c.s.health.get(enemy)!.hp;
+  artSteps(c, 3.2);
+  assert.ok(
+    c.s.health.get(enemy)!.hp <= before - STAFF_ARTS.blink.collapseDamage,
+  );
+  assert.equal(c.s.staffZone.length, 0);
+  const events = c.world.drain();
+  assert.equal(
+    events.filter((e) => e.kind === 'staffArt' && e.ability === 'collapse')
+      .length,
+    1,
+  );
+  assert.deepEqual(JSON.parse(JSON.stringify(c.s.mage.data)), c.s.mage.data);
+  const d = arena();
+  equipStaff(d, 'blink');
+  for (let y = 0; y < d.level.h; y++)
+    d.level.tiles[y * d.level.w + 24] = Tile.WALL;
+  const hidden = mob(d, 810, 600, 2000);
+  castStaffAbility(d, 'barrage');
+  artSteps(d, 5);
+  assert.equal(d.s.health.get(hidden)!.hp, 2000);
+  assert.deepEqual(d.world.pos(hidden), { x: 810, y: 600 });
+});

@@ -65,5 +65,4 @@ export const GROVE = {
   altar: { x: 60.5 * 32, y: 23 * 32 },
   staff: { x: 60.5 * 32, y: 24 * 32 },
   start: { x: 60.5 * 32, y: 25.5 * 32 },
-  cameraZoom: 1.2,
 };

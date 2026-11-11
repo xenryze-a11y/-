@@ -32,6 +32,11 @@ export function tickTimers(ctx: Ctx, dt: number): void {
       mage.cooldowns,
     ) as (keyof typeof mage.cooldowns)[])
       mage.cooldowns[key] = dec(mage.cooldowns[key]);
+    for (const school of Object.values(mage.schools))
+      for (const key of Object.keys(
+        school.cooldowns,
+      ) as (keyof typeof school.cooldowns)[])
+        school.cooldowns[key] = dec(school.cooldowns[key]);
   });
 
   ctx.s.mob.forEach((_e, m) => {
@@ -40,6 +45,7 @@ export function tickTimers(ctx: Ctx, dt: number): void {
     m.hurtFlash = dec(m.hurtFlash);
     m.slow = dec(m.slow || 0);
     m.frozen = dec(m.frozen || 0);
+    m.burn = dec(m.burn || 0);
   });
 
   ctx.s.dodge.forEach((_e, d) => {
