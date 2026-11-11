@@ -7,12 +7,6 @@ import { ITEMS, INVENTORY } from '../items';
 import { CFG } from '../data';
 import type { Ctx } from './context';
 
-let nextRespawn = 0;
-
-export function resetRules(): void {
-  nextRespawn = 0;
-}
-
 export function updateRules(ctx: Ctx): void {
   if (ctx.gameOver) return;
   const pp = ctx.world.pos(ctx.player),
@@ -27,7 +21,7 @@ export function updateRules(ctx: Ctx): void {
     )
       return;
     const before = pk.count,
-      remaining = addItem(inv.slots, pk.kind, before);
+      remaining = addItem(inv.slots, pk.kind, before, pk.instance);
     pk.count = remaining;
     if (remaining === before) {
       if (ctx.world.time - (pk.fullNotice ?? -9) > 3) {
@@ -42,9 +36,12 @@ export function updateRules(ctx: Ctx): void {
   });
 
   if (ctx.gameOver) return;
-  if (ctx.world.withTag(TAG.MOB).length >= 16 || ctx.world.time < nextRespawn)
+  if (
+    ctx.world.withTag(TAG.MOB).length >= 16 ||
+    ctx.world.time < ctx.progress.nextRespawn
+  )
     return;
-  nextRespawn = ctx.world.time + 2.2;
+  ctx.progress.nextRespawn = ctx.world.time + 2.2;
   spawnOne(ctx);
 }
 

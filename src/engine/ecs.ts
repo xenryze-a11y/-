@@ -10,7 +10,16 @@
  * 这里用 Map<Entity, number> 从根上消掉那个坑，代价是每次查组件一次哈希。
  * demo 规模下完全够用；真要上千实体再换回稀疏数组。
  */
-import { makeRng, type Vec2 } from './math';
+import { makeRng, type Vec2, type SeededRng } from './math';
+
+/** 纯数据检查点；持久化格式与不可信输入校验由游戏层负责。 */
+export interface WorldSnapshot {
+  nextId: number;
+  time: number;
+  rng: number;
+  entities: { id: Entity; tags: string[]; position?: Vec2 }[];
+  stores: Record<string, { id: Entity; value: unknown }[]>;
+}
 
 export type Entity = number;
 export const NONE: Entity = 0;
@@ -177,7 +186,7 @@ export class World {
   /** 模拟累计时间（秒）。表现层不要用它驱动动画，动画有自己的时钟。 */
   time = 0;
   /** 种子随机：同种子 + 同输入 = 同结果。表现层的抖动别用 Math.random。 */
-  readonly rng: () => number;
+  readonly rng: SeededRng;
 
   constructor(seed = 1) {
     this.rng = makeRng(seed >>> 0);
@@ -284,5 +293,41 @@ export class World {
     const out = this.events;
     this.events = [];
     return out;
+  }
+
+  snapshot(): WorldSnapshot {
+    if (this.pending.length) throw new Error('Snapshot requires flush');
+    return structuredClone({
+      nextId: this.nextId,
+      time: this.time,
+      rng: this.rng.getState(),
+      entities: [...this.alive].map((id) => ({
+        id,
+        tags: [...(this.tags.get(id) || [])],
+        position: this.positions.get(id),
+      })),
+      stores: Object.fromEntries(
+        [...this.stores].map(([key, store]) => [
+          key,
+          store.owners.map((id, i) => ({ id, value: store.data[i] })),
+        ]),
+      ),
+    });
+  }
+
+  /** 只装入空 World，按 setPos 重建空间索引，不复播旧事件。 */
+  restore(snapshot: WorldSnapshot): void {
+    if (this.alive.size) throw new Error('Restore requires an empty World');
+    const data = structuredClone(snapshot);
+    this.nextId = data.nextId;
+    this.time = data.time;
+    this.rng.setState(data.rng);
+    for (const entity of data.entities) {
+      this.alive.add(entity.id);
+      this.tags.set(entity.id, new Set(entity.tags));
+      if (entity.position) this.setPos(entity.id, entity.position);
+    }
+    for (const [key, entries] of Object.entries(data.stores))
+      for (const entry of entries) this.store(key).set(entry.id, entry.value);
   }
 }

@@ -174,3 +174,8 @@ InventoryCommand 的 `equip` 是守恒交换：只选择已持有武器，若在
 
 
 炎剑新增waveSwingLeft / waveSwingIndex，使每波都配一次0.16秒自动挥击，共5次 / 每0.18秒交替；普通攻击 / F不能中断未完成的同武器挥击，换武器已释放波仍完成。infernoVitality标记当前生命 / 上限是否已翻倍，7秒到期以当前比例缩回，不叠乘、不恢复旧血量、不复活；升级时生命成长按同一倍率计入，结束后保留完整基础升级。伤害与灼烧规则不交给视觉帧。
+
+
+## 持久化边界
+
+World.snapshot/restore 保存纯组件、实体分配器和 RNG 状态，快照前必须 flush；restore 只面向空世界，经 setPos 重建空间索引。Level 同步保存真实阻挡；刷怪计时属于 Scene.progress，不再使用跨局模块变量。新增组件须同步存档白名单与版本，见 [SAVES.md](SAVES.md)。不能把 Pixi 显示对象或输入状态放进快照。

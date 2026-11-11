@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import './saves.test';
 import {
   castMage,
   updateMage,
@@ -42,7 +43,7 @@ import {
 } from '../src/game/systems/combat';
 import { castSelected, updateFields } from '../src/game/systems/magic';
 import { updateProjectiles } from '../src/game/systems/projectile';
-import { updateRules, resetRules } from '../src/game/systems/rules';
+import { updateRules } from '../src/game/systems/rules';
 import { updateAI } from '../src/game/systems/ai';
 import { applyInput } from '../src/game/systems/control';
 import { spawnDrop } from '../src/game/systems/loot';
@@ -313,7 +314,6 @@ test('destroyed props remove blockers and yield material without counting as mon
 });
 test('loot remains on ground when full, then merges after space is freed', () => {
   const c = arena();
-  resetRules();
   const id = spawnDrop(c, 600, 600, 'herb', 3);
   inv(c).slots = Array.from({ length: 36 }, () => ({ id: 'stone', count: 64 }));
   updateRules(c);
@@ -604,7 +604,6 @@ test('storm staff pickup unlocks and equips the profession; full bags never unlo
   assert.equal(c.s.mage.get(c.player)!.unlocked, false);
   assert.equal(player(c).mana, 100);
   const drop = spawnDrop(c, 600, 600, 'storm');
-  resetRules();
   updateRules(c);
   updateMage(c, 0);
   assert.ok(c.world.isPendingDeath(drop));
