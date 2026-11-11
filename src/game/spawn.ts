@@ -83,6 +83,12 @@ export function buildScene(seed = CFG.seed): Scene {
   s.equip.set(player, { shoes: 'leather' });
   s.inventory.set(player, createInventory());
   s.mage.set(player, {
+    schools: {
+      ember: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },
+      frost: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },
+      ward: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },
+      blink: { unlocked: true, cooldowns: { field: 0, wave: 0, barrage: 0 } },
+    },
     unlocked: false,
     cooldowns: { field: 0, wave: 0, barrage: 0 },
     fieldLeft: 0,

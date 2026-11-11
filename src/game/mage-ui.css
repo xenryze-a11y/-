@@ -1,4 +1,4 @@
-/* 暗色金属底座、生命/法力宝珠、三枚职业技能与顺时针冷却环。 */
+/* 漂浮圆形技能与辅助键；无整体底框，冷却环独立显示。 */
 #av-combat {
   position: absolute;
   bottom: 27px;
@@ -8,16 +8,15 @@
   align-items: center;
   gap: 14px;
   padding: 14px 22px 13px;
-  border: 1px solid #716044;
-  background: linear-gradient(180deg, #1c2527f0, #101719f5);
-  box-shadow:
-    0 10px 32px #000a,
-    inset 0 1px #bda66b44;
+  border: 0;
+  background: none;
+  box-shadow: none;
   pointer-events: auto;
   border-radius: 44px 44px 17px 17px;
   min-height: 116px;
 }
 #av-combat:before {
+  display: none;
   content: '';
   position: absolute;
   left: 22px;
@@ -159,7 +158,7 @@
   stroke: #253e43;
 }
 .av-ring-progress {
-  stroke: #9af1d8;
+  stroke: var(--school-accent, #9af1d8);
   stroke-linecap: round;
   transition: stroke-dashoffset 0.09s linear;
   filter: drop-shadow(0 0 2px #7fe6d666);
@@ -220,8 +219,8 @@
   min-height: 58px;
   letter-spacing: 0.08em;
   line-height: 1.8;
-  background: #182321;
-  border: 1px solid #53685b;
+  background: #15201a88;
+  border: 0;
   color: #b9c4a8;
   padding: 6px 14px;
   font-size: 12px;
@@ -236,7 +235,7 @@
   grid-template-columns: repeat(2, 36px);
   gap: 6px;
   margin-left: 5px;
-  border-left: 1px solid #6b61463b;
+  border: 0;
   padding-left: 13px;
 }
 #av-utilities button {
@@ -245,7 +244,7 @@
   padding: 2px;
   background: #273230d9;
   border: 1px solid #77745b;
-  border-radius: 5px;
+  border-radius: 50%;
   color: #dad0b0;
   font-size: 10px;
   pointer-events: auto;
@@ -331,7 +330,7 @@
     flex-wrap: wrap;
     width: 212px;
     justify-content: center;
-    box-shadow: 0 5px 18px #0007;
+    box-shadow: none;
   }
   .av-profession {
     min-width: 0;
@@ -368,14 +367,14 @@
   #av-utilities {
     display: flex;
     border-left: 0;
-    border-top: 1px solid #6b614644;
+    border-top: 0;
     gap: 7px;
     padding: 9px 0 0;
     margin: 12px 0 0;
   }
   #av-utilities button {
     width: 37px;
-    height: 34px;
+    height: 37px;
     font-size: 9px;
   }
   #av-utilities small {
@@ -511,5 +510,6 @@
   }
   #av-utilities.av-utils-weapon button {
     width: 31px;
+    height: 31px;
   }
 }

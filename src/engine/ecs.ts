@@ -72,6 +72,7 @@ export interface GameEvent {
     | 'spell'
     | 'basketball'
     | 'mage'
+    | 'staffArt'
     | 'impact'
     | 'hurt'
     | 'playerHurt'

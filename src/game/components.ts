@@ -3,6 +3,7 @@
  * ⚠️ 表现层的走路相位 / 混合 / 显示对象 **不放这里**，见 engine/renderer.ts 的 AvatarView。
  * 那条隔离保证「有没有渲染」不影响模拟结果，也是以后接服务端权威的前提。
  */
+import type { ElementStaffId } from './staff-data';
 import type { MageSkillId } from './mage-data';
 import type { Store, World } from '../engine/ecs';
 import type { InventoryState } from './inventory';
@@ -36,6 +37,9 @@ export const C = {
   FIELD: 'field',
   MAGE: 'mage',
   WAVE: 'wave',
+  STAFF_ZONE: 'staffZone',
+  STAFF_SHOT: 'staffShot',
+  METEOR: 'meteor',
   SUMMON: 'summon',
 } as const;
 
@@ -89,6 +93,8 @@ export interface Mob {
   home: Vec2;
   slow?: number;
   frozen?: number;
+  burn?: number;
+  burnTick?: number;
   windup?: number;
   charge?: number;
 }
@@ -132,7 +138,12 @@ export interface Summon {
   angle: number;
 }
 
+export interface ProfessionState {
+  unlocked: boolean;
+  cooldowns: Record<MageSkillId, number>;
+}
 export interface MageState {
+  schools: Record<ElementStaffId, ProfessionState>;
   unlocked: boolean;
   cooldowns: Record<MageSkillId, number>;
   fieldLeft: number;
@@ -150,6 +161,47 @@ export interface ThunderWave {
   next: number;
   tick: number;
   hit: number[];
+}
+
+export type StaffZoneKind =
+  | 'embers'
+  | 'meteors'
+  | 'burn'
+  | 'blizzard'
+  | 'judgment'
+  | 'singularity';
+export interface StaffZone {
+  owner: number;
+  school: ElementStaffId;
+  kind: StaffZoneKind;
+  life: number;
+  maxLife: number;
+  tick: number;
+  phase: number;
+  radius: number;
+}
+export type StaffShotStyle = 'lance' | 'spear' | 'star' | 'blade';
+export interface StaffShot {
+  owner: number;
+  school: ElementStaffId;
+  style: StaffShotStyle;
+  vx: number;
+  vy: number;
+  age: number;
+  life: number;
+  damage: number;
+  radius: number;
+  pierce: number;
+  hit: number[];
+  returning: boolean;
+  target: number;
+}
+export interface FallingMeteor {
+  owner: number;
+  delay: number;
+  maxDelay: number;
+  radius: number;
+  damage: number;
 }
 
 export interface SpellField {
@@ -204,6 +256,9 @@ export interface Stores {
   mage: Store<MageState>;
   wave: Store<ThunderWave>;
   summon: Store<Summon>;
+  staffZone: Store<StaffZone>;
+  staffShot: Store<StaffShot>;
+  meteor: Store<FallingMeteor>;
 }
 
 export function createStores(w: World): Stores {
@@ -224,5 +279,8 @@ export function createStores(w: World): Stores {
     mage: w.register<MageState>(C.MAGE),
     wave: w.register<ThunderWave>(C.WAVE),
     summon: w.register<Summon>(C.SUMMON),
+    staffZone: w.register<StaffZone>(C.STAFF_ZONE),
+    staffShot: w.register<StaffShot>(C.STAFF_SHOT),
+    meteor: w.register<FallingMeteor>(C.METEOR),
   };
 }

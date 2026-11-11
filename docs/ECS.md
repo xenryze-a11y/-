@@ -65,6 +65,7 @@ app.ticker (真实 dt)
            updateProjectiles  移动 / 撞墙 / 命中 / 爆炸
            updateFields    雷暴生命周期 / 周期伤害
            updateMage      雷电法师电场 / 五段震荡 / 连射与环绕伤害
+           updateStaffArts 其余四系的区域 / 弹道 / 陨石 / 灼烧
            updateSummons   篮球召唤追击 / 扫掠 / 引爆
            updateRules     拾取 / 补怪
            world.flush()   统一删除
@@ -143,3 +144,10 @@ updatePoison(ctx, fixed);
 `syncMageUnlock` 只在真实获得 storm 物品后解锁。快捷栏内可直接选中法杖；在背包里时不能用选中下标取模误选其他物品。释放时再次检查选中的物品必须为 storm。换武器、丢下法杖不重置本局解锁或冷却；已释放法术继续完成，新一局全部重置。
 
 `mage` 标量事件只携带 ability / stage / 坐标 / 朝向。电球复用投射物扫掠，barrage 标记决定范围爆炸；后方出生点不可越墙。`s.wave` 删除仍须 destroy → flush。
+
+
+## 其余四系职业
+
+MageState.schools 分别保存 ember / frost / ward / blink 的 unlocked 和三项 cooldown，雷电原字段保留。profession.ts 提供统一释放入口与只读查询。StaffZone 保存 owner / school / kind / life / tick / phase / radius；StaffShot 保存速度、生命周期、伤害、穿透次数、已命中列表与回旋状态；FallingMeteor 保存延迟和爆炸参数，均为纯数据。灼烧计时存在 Mob.burn / burnTick。
+
+updateStaffArts 顺序为解锁扫描 → 扫掠弹道 → 陨石落地 → 区域 / 牵引 / 坍缩 → 灼烧。独立 Store 不在遍历中删除。不同法杖可同时留下效果；区域≤28、弹道≤48、陨石≤18，超额施法不消耗法力、不启动冷却。表现只读这些状态和 staffArt 标量事件。详见 STAFF_PROFESSIONS.md。

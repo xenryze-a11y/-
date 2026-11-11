@@ -5,8 +5,16 @@ import { BTN, type Input } from '../engine/input';
 import type { TextureAtlas } from '../engine/atlas';
 import type { GameEvent } from '../engine/ecs';
 import { Tile } from '../engine/level';
-import { MAGE_IDS, MAGE_SKILLS, GROVE, type MageSkillId } from './mage-data';
-import { ITEMS, ABILITIES, isAbility, type ItemId } from './items';
+import { MAGE_IDS, GROVE, type MageSkillId } from './mage-data';
+import { STAFF_PROFESSIONS, staffIconName } from './staff-data';
+import { selectedProfession, professionState } from './systems/profession';
+import {
+  ITEMS,
+  ABILITIES,
+  isAbility,
+  type SkillId,
+  type ItemId,
+} from './items';
 import {
   getSlot,
   recipe,
@@ -89,9 +97,13 @@ export class GameUI {
       this.icons[id] = c.toDataURL();
     }
   }
-  private makeMageIcons(): void {
+  private iconSchool?: SkillId;
+  private lastStaff: SkillId = 'ember';
+  private makeMageIcons(school: SkillId = 'ember'): void {
+    if (this.iconSchool === school) return;
+    this.iconSchool = school;
     for (const id of MAGE_IDS) {
-      const frame = this.atlas.frames['skill_' + id],
+      const frame = this.atlas.frames[staffIconName(school, id)],
         canvas = document.createElement('canvas');
       canvas.width = 64;
       canvas.height = 64;
@@ -103,26 +115,35 @@ export class GameUI {
     }
   }
   private updateMageHUD(ctx: Ctx): void {
-    const mage = ctx.s.mage.get(ctx.player)!,
-      player = ctx.s.player.get(ctx.player)!,
-      selected = this.inventory.slots[this.inventory.selected]?.id === 'storm',
-      active = mage.unlocked && selected;
-    this.q('#av-utilities [data-action=cast]').hidden = selected;
+    const player = ctx.s.player.get(ctx.player)!,
+      selected = selectedProfession(ctx);
+    if (selected) this.lastStaff = selected;
+    const school = selected || this.lastStaff,
+      state = professionState(ctx, school),
+      role = STAFF_PROFESSIONS[school],
+      active = !!selected && state.unlocked;
+    this.makeMageIcons(school);
+    this.q('#av-combat').style.setProperty('--school-accent', role.color);
+    this.q('#av-utilities [data-action=cast]').hidden = !!selected;
     this.q('#av-utilities').classList.toggle('av-utils-weapon', !selected);
     this.q('#av-class-skills').hidden = !active;
+    this.q('#av-class-skills').setAttribute(
+      'aria-label',
+      role.name + '专属三技能',
+    );
     this.q('#av-class-hint').hidden = active;
-    this.q('#av-class-hint').textContent = mage.unlocked
-      ? '装备雷电法杖 · 启用职业技能'
+    this.q('#av-class-hint').textContent = state.unlocked
+      ? '装备法杖 · 启用职业技能'
       : '古树祭坛 · 寻找雷电法杖';
     this.q('#av-class-caption').textContent = active
-      ? 'THE STORMCALLER · 雷电法师'
-      : mage.unlocked
-        ? '雷电法师 · 已解锁'
+      ? role.title + ' · ' + role.name
+      : state.unlocked
+        ? '法杖职业 · Q / F / R'
         : 'ANCIENT GROVE · 古树祭坛';
     for (const id of MAGE_IDS) {
       const button = this.q<HTMLButtonElement>(`[data-mage="${id}"]`),
-        remaining = mage.cooldowns[id],
-        def = MAGE_SKILLS[id],
+        remaining = state.cooldowns[id],
+        def = role.skills[id],
         ratio = Math.min(1, Math.max(0, remaining / def.cooldown)),
         circumference = 2 * Math.PI * 32;
       const ring = button.querySelector<SVGCircleElement>('.av-ring-progress')!;
@@ -132,17 +153,22 @@ export class GameUI {
       button.classList.toggle('ready', remaining <= 0);
       button.classList.toggle('no-mana', player.mana < def.cost);
       button.disabled = !active || remaining > 0 || player.mana < def.cost;
+      button.querySelector('.av-mage-key')!.textContent =
+        def.key + ' · ' + def.short;
       button.querySelector('.av-mage-count')!.textContent =
         remaining > 0
           ? remaining >= 10
             ? String(Math.ceil(remaining))
             : remaining.toFixed(1)
           : '';
+      button.title =
+        def.name + ' · ' + def.description + ' · ' + def.cost + ' 法力';
       button.setAttribute(
         'aria-label',
         `${def.name}，${def.key}，${remaining > 0 ? '冷却 ' + remaining.toFixed(1) + ' 秒' : '已就绪'}，${def.cost} 法力`,
       );
       button.dataset.remaining = String(remaining);
+      button.dataset.school = school;
     }
     const hp = ctx.s.health.get(ctx.player)!;
     this.q('#av-health-orb').style.setProperty(
@@ -234,7 +260,7 @@ export class GameUI {
     this.q('#av-start2').textContent = this.running ? '重新启程' : '进入灰烬谷';
     this.q('#av-menu-desc').textContent = this.context().gameOver
       ? '旅途在此暂歇。带上新的补给，再一次踏入灰烬谷。'
-      : '古树苏醒，雷光未熄。前往东侧祭坛取得雷电法杖，解锁雷电法师。';
+      : '五系法杖，各有三种秘术。前往东侧祭坛取得雷电法杖，集齐五系职业。';
   }
   restarted(): void {
     this.running = true;
@@ -244,7 +270,7 @@ export class GameUI {
     this.setInventory(false);
     this.setMenu(false);
     this.lastRevision = -1;
-    this.toast('东行寻找雷电法杖 · Q / F / R 职业技能 · E 背包');
+    this.toast('Q / F / R 三技能 · 切换法杖切换职业 · E 背包');
   }
   private setHelp(open: boolean): void {
     this.helpOpen = open;
@@ -334,16 +360,22 @@ export class GameUI {
         this.actions.inventory(!this.inventoryOpen);
     };
     this.q('#av-class-hint').onclick = () => {
-      const index = this.inventory.slots.findIndex(
-        (item) => item?.id === 'storm',
+      let index = this.inventory.slots.findIndex(
+        (item) => item?.id === this.lastStaff,
       );
+      if (index < 0)
+        index = this.inventory.slots.findIndex(
+          (item) =>
+            item &&
+            ['ember', 'frost', 'storm', 'ward', 'blink'].includes(item.id),
+        );
       if (index >= 0 && index < 9)
         this.actions.command({ type: 'select', index });
       else
         this.toast(
           index >= 9
-            ? '把背包里的雷电法杖移入快捷栏'
-            : '沿东侧道路前往古树祭坛，在祭坛前取得雷电法杖',
+            ? '把背包里的法杖移入快捷栏'
+            : '沿东侧道路前往古树祭坛，寻找雷电法杖',
         );
     };
     this.q('#av-resume').onclick = () => this.setMenu(false);

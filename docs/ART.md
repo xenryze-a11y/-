@@ -181,4 +181,11 @@ interface Rig {
 
 电场只画电弧与地面电网；大招才显示 5 个固定复用的电球 Sprite，同时后方不断生成独立电球投射物。波列的五次命中事件按段播放，起手环不额外画成第六道震荡。`MageVfx` 的 burst / 粒子上限 48 / 256，全部清理和显示时钟留在表现层。
 
-职业按钮用生图图标的 CPU 截帧 data URL，世界仍只上传一张图集。冷却外圈为 SVG，读取 `remaining / cooldown` 设置 dashoffset，满环即就绪；图标不自带时间和定时器。Q 电场、F 震荡、R 天幕，辅助键用文字按钮。高屏林地拉开全景，矮屏限制相机前移，避免把玩家放到战斗栏后面。
+职业按钮用生图图标的 CPU 截帧 data URL，世界仍只上传一张图集。冷却外圈为 SVG，读取 `remaining / cooldown` 设置 dashoffset，满环即就绪；图标不自带时间和定时器。Q 电场、F 震荡、R 天幕，辅助键用文字按钮。祭坛恢复原区域镜头：桌面 zoom=2、窄屏 1.75，跟随玩家位置，不做林地专用前移。
+
+
+## 五系技能图标与大招
+
+新增 `skill_<ember|frost|ward|blink>_<field|wave|barrage>` 十二枚 64×64；雷电保留 skill_field / skill_wave / skill_barrage。四列三行原稿由 prepare-staff-icons.cjs 经 Canvas 最近邻、硬透明和 17 色阶规范化为 staff-icons.png。staff-art.ts 先合并 CPU atlas，再上传 GPU；artFlameLance=48×20、artMeteor=48×72，为程序化像素帧。原稿保留 source，运行包只内嵌小图。
+
+staff-arts-vfx.ts 分层绘制火环 / 陨火、冰晶暴雪、六柱星辉和黑洞坍缩，池上限 burst64、粒子384。陨石 Sprite 的高度由模拟落地延迟只读投影；星弹追踪和飞刃回旋由模拟决定方向，拖尾不参与碰撞。技能与使用、背包等按钮保留各自圆形轮廓，去除整体大底框。

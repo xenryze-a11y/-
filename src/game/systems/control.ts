@@ -2,9 +2,9 @@
 import { BTN, type InputState } from '../../engine/input';
 import { angle, len, norm, fromAngle } from '../../engine/math';
 import { CFG } from '../data';
-import { useSelected, selectedItem } from '../inventory';
+import { useSelected } from '../inventory';
 import { dropSelected } from './loot';
-import { castMage } from './mage';
+import { castStaffAbility, selectedProfession } from './profession';
 import { castSelected } from './magic';
 import type { Ctx } from './context';
 
@@ -59,10 +59,10 @@ export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
     ),
   );
   if (input.down & BTN.ATTACK) castSelected(ctx);
-  if (input.pressed & BTN.FIELD) castMage(ctx, 'field');
+  if (input.pressed & BTN.FIELD) castStaffAbility(ctx, 'field');
   if (input.pressed & BTN.CAST) {
-    if (selectedItem(ctx)?.id === 'storm') castMage(ctx, 'wave');
+    if (selectedProfession(ctx)) castStaffAbility(ctx, 'wave');
     else castSelected(ctx, true);
   }
-  if (input.pressed & BTN.ULTIMATE) castMage(ctx, 'barrage');
+  if (input.pressed & BTN.ULTIMATE) castStaffAbility(ctx, 'barrage');
 }

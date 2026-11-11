@@ -8,6 +8,7 @@ import { fxFinished, fxFrameIndex, type FxAnim } from '../engine/animation';
 import type { TextureAtlas } from '../engine/atlas';
 import type { Camera } from '../engine/camera';
 import type { GameEvent } from '../engine/ecs';
+import { StaffArtsVfx } from './staff-arts-vfx';
 import { MageVfx } from './mage-vfx';
 import { BasketballVfx } from './basketball-vfx';
 import { PixelSpellVfx } from './pixel-spell-vfx';
@@ -36,6 +37,7 @@ export class Presentation {
   private readonly pixels: PixelSpellVfx;
   private readonly basketball: BasketballVfx;
   private readonly mage: MageVfx;
+  private readonly staffArts: StaffArtsVfx;
   private readonly decals: Sprite[] = [];
 
   constructor(
@@ -47,11 +49,17 @@ export class Presentation {
     this.pixels = new PixelSpellVfx(fxLayer, decalLayer);
     this.basketball = new BasketballVfx(fxLayer, atlas);
     this.mage = new MageVfx(decalLayer, fxLayer, atlas);
+    this.staffArts = new StaffArtsVfx(decalLayer, fxLayer);
   }
 
   consume(events: GameEvent[]): void {
     for (const ev of events) {
       switch (ev.kind) {
+        case 'staffArt':
+          this.staffArts.consume(ev);
+          if (ev.ability === 'meteor' || ev.ability === 'collapse')
+            this.camera.shake(ev.ability === 'collapse' ? 4 : 2, 0.2);
+          break;
         case 'mage':
           this.mage.consume(ev);
           if (ev.stage === 'impact')
@@ -169,6 +177,7 @@ export class Presentation {
     this.pixels.clear();
     this.basketball.clear();
     this.mage.clear();
+    this.staffArts.clear();
     for (const d of this.decals) {
       this.decalLayer.removeChild(d);
       d.destroy();
@@ -180,6 +189,11 @@ export class Presentation {
   sync(scene: Scene, dt: number): void {
     this.pixels.sync(scene, dt);
     this.mage.sync(scene, dt);
+    this.staffArts.sync(scene, dt);
+  }
+
+  get staffArtsStats() {
+    return this.staffArts.stats;
   }
 
   get mageStats() {
