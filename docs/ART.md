@@ -189,3 +189,12 @@ interface Rig {
 新增 `skill_<ember|frost|ward|blink>_<field|wave|barrage>` 十二枚 64×64；雷电保留 skill_field / skill_wave / skill_barrage。四列三行原稿由 prepare-staff-icons.cjs 经 Canvas 最近邻、硬透明和 17 色阶规范化为 staff-icons.png。staff-art.ts 先合并 CPU atlas，再上传 GPU；artFlameLance=48×20、artMeteor=48×72，为程序化像素帧。原稿保留 source，运行包只内嵌小图。
 
 staff-arts-vfx.ts 分层绘制火环 / 陨火、冰晶暴雪、六柱星辉和黑洞坍缩，池上限 burst64、粒子384。陨石 Sprite 的高度由模拟落地延迟只读投影；星弹追踪和飞刃回旋由模拟决定方向，拖尾不参与碰撞。技能与使用、背包等按钮保留各自圆形轮廓，去除整体大底框。
+
+
+## 程序化圣域与模块化方块旅人
+
+本次用户要求覆盖 D8 / D22 的玩家悬浮手脚方案，怪物保持旧实现。block-rig.ts 提供纯数据部件姿态，block-avatar.ts 复用 Sprite，UI 预览直接调用同一 blockPose。block_<part>_<material>_<front|back|side>：head24×24、body24×20、arm6×17、hand6×6、leg8×14、boot10×9。臂端与手、腿端与鞋、手与武器共用挂点；步态仍只读取实际位移，正背侧独立、左向镜像。套装颜色在 armor.ts，新增材质不应复制新骨架。
+
+sanctuary-art.ts 生成 96×128 普通树、320×352 神树（由 groveSpecs 调用）、544×864 教堂屋面和480×704 内部地面；屋顶覆盖真实480×704占地，外部 alpha=1，内部目标 .035。主屋面在 FX 之上以遮住内部特效；floor 和内部实体仅入内可见。北 / 南门都是实际碰撞开口，屋顶不作为碰撞。完整建筑由双塔、中央尖塔、横翼、天窗、飞扶壁、玫瑰窗和门廊构成；内部家具各自按脚底深度排序。
+
+生成树图不再被运行包引用，原稿仅保留为历史参考。程序化树、教堂、NPC 和玩家部件仍在启动时合入同一 TextureSource；场景地面烘焙沿用既有独立纹理，不逐个物体上传。

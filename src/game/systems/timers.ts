@@ -5,6 +5,7 @@
  *
  * ⚠️ 本系统在 applyInput 之后跑：冷却必须在攻击判定之后推进，否则同一帧能打两次。
  */
+import { fullSet, ARMOR_SET_MANA_REGEN } from '../armor';
 import { CFG } from '../data';
 import type { Ctx } from './context';
 
@@ -24,7 +25,15 @@ export function tickTimers(ctx: Ctx, dt: number): void {
     p.shield = dec(p.shield);
     if (!p.shield) p.shieldHp = 0;
     p.noManaCd = dec(p.noManaCd);
-    p.mana = Math.min(p.maxMana, p.mana + CFG.player.manaRegen * dt);
+    p.mana = Math.min(
+      p.maxMana,
+      p.mana +
+        (CFG.player.manaRegen +
+          (fullSet(ctx.s.equip.get(_e)) === 'sanctum'
+            ? ARMOR_SET_MANA_REGEN
+            : 0)) *
+          dt,
+    );
   });
 
   ctx.s.mage.forEach((_id, mage) => {

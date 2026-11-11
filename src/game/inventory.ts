@@ -1,4 +1,5 @@
 /** 背包属于模拟数据。界面只发命令，在组装层统一调用这些规则。 */
+import { ARMOR_SLOTS } from './armor';
 import { ITEMS, INVENTORY, isSkill, type ItemId } from './items';
 import type { Ctx } from './systems/context';
 
@@ -10,6 +11,7 @@ export interface InventoryState {
   slots: (ItemStack | null)[];
   craft: (ItemStack | null)[];
   boots: ItemStack | null;
+  armor: Record<'head' | 'chest' | 'legs', ItemStack | null>;
   cursor: ItemStack | null;
   selected: number;
   revision: number;
@@ -44,10 +46,18 @@ export function createInventory(): InventoryState {
   slots[11] = { id: 'iron', count: 1 };
   slots[12] = { id: 'stone', count: 12 };
   slots[14] = { id: 'wood', count: 8 };
+  slots[15] = { id: 'iron_head', count: 1 };
+  slots[16] = { id: 'iron_chest', count: 1 };
+  slots[17] = { id: 'iron_legs', count: 1 };
   return {
     slots,
     craft: [null, null, null, null],
     boots: { id: 'leather', count: 1 },
+    armor: {
+      head: null,
+      chest: { id: 'leather_chest', count: 1 },
+      legs: { id: 'leather_legs', count: 1 },
+    },
     cursor: null,
     selected: 0,
     revision: 0,
@@ -77,6 +87,7 @@ export function addItem(
   return count;
 }
 export function getSlot(inv: InventoryState, index: number): ItemStack | null {
+  if (ARMOR_SLOTS[index]) return inv.armor[ARMOR_SLOTS[index].slot];
   return index === 40
     ? inv.boots
     : index >= 36 && index < 40
@@ -88,7 +99,8 @@ function setSlot(
   index: number,
   item: ItemStack | null,
 ): void {
-  if (index === 40) inv.boots = item;
+  if (ARMOR_SLOTS[index]) inv.armor[ARMOR_SLOTS[index].slot] = item;
+  else if (index === 40) inv.boots = item;
   else if (index >= 36 && index < 40) inv.craft[index - 36] = item;
   else inv.slots[index] = item;
 }
@@ -125,11 +137,17 @@ export function syncEquipment(ctx: Ctx): void {
   } else if (selected?.id === 'sword') p.weapon = 'sword';
   else if (selected?.id === 'basketball') p.weapon = 'basketball';
   eq.shoes =
-    inv.boots?.id === 'iron'
-      ? 'iron'
-      : inv.boots?.id === 'leather'
-        ? 'leather'
-        : 'bare';
+    inv.boots?.id === 'sanctum_boots'
+      ? 'sanctum'
+      : inv.boots?.id === 'iron'
+        ? 'iron'
+        : inv.boots?.id === 'leather'
+          ? 'leather'
+          : 'bare';
+  for (const slot of ['head', 'chest', 'legs'] as const)
+    eq[slot] = inv.armor[slot]
+      ? ITEMS[inv.armor[slot]!.id].armorMat || 'none'
+      : 'none';
 }
 export function returnCursor(ctx: Ctx): boolean {
   const inv = ctx.s.inventory.get(ctx.player)!;
@@ -170,7 +188,8 @@ export function applyInventoryCommand(ctx: Ctx, cmd: InventoryCommand): void {
     );
   } else {
     const index = cmd.index;
-    if (!Number.isInteger(index) || index < 0 || index > 40) return;
+    if (!Number.isInteger(index) || index < 0 || index > 44 || index === 41)
+      return;
     const source = getSlot(inv, index);
     let cursor = inv.cursor;
     if (cmd.shift && source && !cursor) {
@@ -187,6 +206,13 @@ export function applyInventoryCommand(ctx: Ctx, cmd: InventoryCommand): void {
       source.count -= count;
       if (!source.count) setSlot(inv, index, null);
     } else if (cursor) {
+      if (
+        ARMOR_SLOTS[index] &&
+        ITEMS[cursor.id].armorSlot !== ARMOR_SLOTS[index].slot
+      ) {
+        notice(ctx, '这个位置只能装备' + ARMOR_SLOTS[index].name);
+        return;
+      }
       if (index === 40 && ITEMS[cursor.id].kind !== 'boots') {
         notice(ctx, '这个位置只能装备靴子');
         return;

@@ -1,5 +1,5 @@
 import type { BuiltAtlas, Spec, Painter } from '../engine/art';
-import treesURL from './assets/grove-trees.png?inline';
+import { drawSacredTree } from './sanctuary-art';
 import iconsURL from './assets/mage-icons.png?inline';
 import { MAGE_IDS } from './mage-data';
 export function drawElectricOrb(p: Painter, frame: number): void {
@@ -29,13 +29,7 @@ export function groveSpecs(): Spec[] {
       name: 'propAncientTree',
       w: 320,
       h: 352,
-      draw: (p) => {
-        p.disc(160, 114, 105, '#284a37');
-        p.disc(100, 140, 78, '#35543b');
-        p.disc(215, 130, 85, '#375e43');
-        p.line(160, 170, 160, 345, '#574b32', 36);
-        p.line(155, 180, 155, 335, '#83c3a3', 3);
-      },
+      draw: drawSacredTree,
     },
     {
       name: 'propAltar',
@@ -97,13 +91,8 @@ async function decode(url: string): Promise<HTMLImageElement> {
 }
 export async function applyGroveArt(atlas: BuiltAtlas): Promise<boolean> {
   try {
-    const [trees, icons] = await Promise.all([
-      decode(treesURL),
-      decode(iconsURL),
-    ]);
+    const icons = await decode(iconsURL);
     const patches = [
-      { name: 'propTree', image: trees, sx: 0, sy: 0, w: 96, h: 128 },
-      { name: 'propAncientTree', image: trees, sx: 96, sy: 0, w: 320, h: 352 },
       ...MAGE_IDS.map((id, i) => ({
         name: 'skill_' + id,
         image: icons,

@@ -58,8 +58,9 @@ export const MAGE = {
   orbitDamage: 9,
 };
 export const GROVE = {
-  width: 72,
-  height: 48,
+  width: 96,
+  height: 72,
+  oldHeight: 48,
   oldWidth: 48,
   tree: { x: 60.5 * 32, y: 18 * 32 },
   altar: { x: 60.5 * 32, y: 23 * 32 },

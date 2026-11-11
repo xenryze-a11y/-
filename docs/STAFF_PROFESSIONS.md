@@ -25,3 +25,5 @@
 ![虚空坍缩实机](staff-void.png)
 
 ![手机漂浮技能与小圆键](staff-mobile.png)
+
+当前地图已继续扩为 96×72，树改为程序绘制，加入圣使与教堂任务；原五系技能规则仍保留。新人物与套装见 [SANCTUARY.md](SANCTUARY.md)。

@@ -15,6 +15,7 @@ export const SHOE_MATERIALS: ShoeMat[] = [
   'leather',
   'iron',
   'zombieBare',
+  'sanctum',
 ];
 /** 玩家能换的四种；zombieBare 是亡者按腐肉色出的赤脚，不给玩家穿。 */
 export const PLAYER_SHOES: ShoeMat[] = ['bare', 'cloth', 'leather', 'iron'];
@@ -24,6 +25,7 @@ export const SHOE_LABEL: Record<ShoeMat, string> = {
   leather: '皮靴',
   iron: '铁靴',
   zombieBare: '腐足',
+  sanctum:'圣靴',
 };
 
 export const CFG = {

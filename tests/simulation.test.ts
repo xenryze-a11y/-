@@ -574,10 +574,10 @@ test('summons reselect after a target disappears, serialize without browser stat
 
 test('grove extends east of the original town and keeps a clear altar route and real quest pickup', () => {
   const level = createGroveLevel(20261109);
-  assert.equal(level.w, 72);
-  assert.equal(level.h, 48);
+  assert.equal(level.w, 96);
+  assert.equal(level.h, 72);
   assert.ok(level.lineClear(level.spawn, GROVE.staff));
-  for (let y = 0; y < 48; y++) assert.equal(level.at(71, y), Tile.WALL);
+  for (let y = 0; y < 48; y++) assert.equal(level.at(95, y), Tile.WALL);
   const scene = buildScene();
   assert.equal(
     scene.s.inventory
@@ -1085,4 +1085,243 @@ test('singularity pulls through collision-safe motion, collapses once, and seria
   artSteps(d, 5);
   assert.equal(d.s.health.get(hidden)!.hp, 2000);
   assert.deepEqual(d.world.pos(hidden), { x: 810, y: 600 });
+});
+
+import {
+  SANCTUARY,
+  inCathedral,
+  onCathedral,
+} from '../src/game/sanctuary-data';
+import {
+  applyQuestCommand,
+  questProgress,
+  canTalk,
+  nearbyNpc,
+  grantXp,
+  levelRequirement,
+} from '../src/game/systems/quests';
+import { armorReduction, fullSet } from '../src/game/armor';
+import { blockPose, BLOCK_RIG } from '../src/game/block-rig';
+function addNpc(
+  c: Ctx,
+  kind: 'herald' | 'priest',
+  x: number,
+  y: number,
+): number {
+  const id = c.world.createAt(['npc'], x, y);
+  c.s.npc.set(id, { kind });
+  return id;
+}
+test('expanded sacred grounds remove both old seam walls and the nearby east wall, with two real cathedral doors', () => {
+  const c = arena(),
+    l = createGroveLevel(20261109),
+    r = SANCTUARY.cathedral;
+  assert.equal(l.w, 96);
+  assert.equal(l.h, 72);
+  for (let y = 1; y < 47; y++) {
+    assert.notEqual(l.at(47, y), Tile.WALL);
+    assert.notEqual(l.at(71, y), Tile.WALL);
+  }
+  for (let x = 1; x < 47; x++) assert.notEqual(l.at(x, 47), Tile.WALL);
+  assert.equal(l.blocked(r.x + 16, r.y + 160, 10), true);
+  assert.equal(
+    l.blocked(SANCTUARY.northDoor.x, SANCTUARY.northDoor.y, 10),
+    false,
+  );
+  assert.equal(
+    l.blocked(SANCTUARY.southDoor.x, SANCTUARY.southDoor.y, 10),
+    false,
+  );
+  assert.equal(
+    l.lineClear({ x: r.x - 20, y: r.y + 140 }, { x: r.x + 70, y: r.y + 140 }),
+    false,
+  );
+  assert.equal(l.lineClear({ x: 1936, y: 1040 }, { x: 1936, y: 1620 }), true);
+  assert.equal(inCathedral({ x: 1936, y: 1040 }), false);
+  assert.equal(inCathedral({ x: 1936, y: 1125 }), true);
+  assert.equal(inCathedral(SANCTUARY.northDoor), true);
+  assert.equal(inCathedral(SANCTUARY.southDoor), true);
+  assert.ok(onCathedral({ x: 1936, y: 1500 }));
+  const scene = buildScene();
+  let pos = { x: 1936, y: 1000 };
+  for (let i = 0; i < 310; i++) pos = scene.level.move(pos, 0, 2, 10);
+  assert.equal(pos.y, 1620);
+  assert.equal(scene.s.npc.length, 2);
+  assert.ok(
+    scene.s.prop.data.filter((p) => p.sprite === 'propChurchPew').length === 8,
+  );
+  assert.equal(c.s.journal.get(c.player)!.stage, 'unmet');
+});
+test('four equipment slots reject wrong parts without losing cursor items and update actual damage reduction', () => {
+  const c = arena();
+  slot(c, 15);
+  const cursor = JSON.stringify(inv(c).cursor);
+  slot(c, 43);
+  assert.equal(JSON.stringify(inv(c).cursor), cursor);
+  assert.equal(inv(c).armor.head, null);
+  slot(c, 42);
+  assert.equal(c.s.equip.get(c.player)!.head, 'iron');
+  for (const [bag, equip] of [
+    [16, 43],
+    [17, 44],
+    [11, 40],
+  ]) {
+    slot(c, bag);
+    slot(c, equip);
+    slot(c, bag);
+  }
+  assert.equal(fullSet(c.s.equip.get(c.player)), 'iron');
+  assert.equal(armorReduction(c.s.equip.get(c.player)), 6);
+  const hp = c.s.health.get(c.player)!;
+  applyDamage(c, c.player, 12, 0);
+  assert.equal(hp.hp, 108 + 6);
+  slot(c, 42);
+  assert.equal(c.s.equip.get(c.player)!.head, 'none');
+  assert.equal(fullSet(c.s.equip.get(c.player)), null);
+  assert.equal(armorReduction(c.s.equip.get(c.player)), 5);
+});
+test('only complete dawn equipment grants bonus mana regeneration; mixed sets keep their normal armor', () => {
+  const c = arena(),
+    eq = c.s.equip.get(c.player)!;
+  Object.assign(eq, {
+    head: 'sanctum',
+    chest: 'sanctum',
+    legs: 'sanctum',
+    shoes: 'sanctum',
+  });
+  player(c).mana = 10;
+  tickTimers(c, 1);
+  assert.equal(player(c).mana, 21);
+  eq.head = 'iron';
+  tickTimers(c, 1);
+  assert.equal(player(c).mana, 30);
+  assert.equal(fullSet(eq), null);
+  assert.equal(armorReduction(eq), 6);
+});
+test('modular armor preserves shoulder/wrist and hip/sole connections across walking, casting and all four directions', () => {
+  const eq = {
+      shoes: 'iron',
+      head: 'iron',
+      chest: 'iron',
+      legs: 'iron',
+    } as const,
+    pose = newLimbPose();
+  pose.blend = 1;
+  for (const view of ['front', 'back', 'side'] as const)
+    for (const flip of [false, true])
+      for (const phase of [0, 0.7, 1.4, 3.2, 5]) {
+        pose.phase = phase;
+        const parts = blockPose(pose, eq, view, flip, 0.8, 0.7),
+          other = blockPose(pose, { shoes: 'bare' }, view, flip, 0.8, 0.7);
+        assert.deepEqual(
+          parts.map(({ frame, ...part }) => part),
+          other.map(({ frame, ...part }) => part),
+        );
+        for (let i = 0; i < 2; i++) {
+          const arm = parts.find((p) => p.part === 'arm' + i)!,
+            hand = parts.find((p) => p.part === 'hand' + i)!,
+            leg = parts.find((p) => p.part === 'leg' + i)!,
+            foot = parts.find((p) => p.part === 'foot' + i)!;
+          assert.ok(
+            Math.abs(
+              Math.hypot(hand.x - arm.x, hand.y - arm.y) - BLOCK_RIG.armLength,
+            ) < 0.00001,
+          );
+          assert.ok(
+            Math.abs(
+              Math.hypot(foot.x - leg.x, foot.y - leg.y) -
+                BLOCK_RIG.legLength * leg.sy,
+            ) < 0.00001,
+          );
+        }
+      }
+});
+test('NPC conversation requires distance, wall visibility and the same building interior', () => {
+  const c = arena(),
+    id = addNpc(c, 'herald', 650, 600);
+  assert.equal(nearbyNpc(c), id);
+  applyQuestCommand(c, { type: 'talk', npc: id });
+  assert.equal(c.s.journal.get(c.player)!.talking, id);
+  applyQuestCommand(c, { type: 'close' });
+  c.level.tiles[18 * c.level.w + 20] = Tile.WALL;
+  assert.equal(canTalk(c, id), false);
+  applyQuestCommand(c, { type: 'talk', npc: id });
+  assert.equal(c.s.journal.get(c.player)!.talking, 0);
+  c.world.setPos(c.player, { x: 1936, y: 1080 });
+  c.world.setPos(id, { x: 1936, y: 1150 });
+  assert.equal(canTalk(c, id), false);
+  c.world.setPos(c.player, { x: 1936, y: 1130 });
+  assert.equal(canTalk(c, id), true);
+});
+test('herald quest counts only kills after acceptance, advances by real combat, and cannot be claimed twice', () => {
+  const c = arena(),
+    herald = addNpc(c, 'herald', 650, 600),
+    j = c.s.journal.get(c.player)!;
+  player(c).kills = 5;
+  applyQuestCommand(c, { type: 'talk', npc: herald });
+  applyQuestCommand(c, { type: 'accept' });
+  assert.equal(j.stage, 'purifying');
+  assert.equal(j.talking, 0);
+  assert.equal(questProgress(c), 0);
+  applyQuestCommand(c, { type: 'talk', npc: herald });
+  applyQuestCommand(c, { type: 'report' });
+  assert.equal(j.stage, 'purifying');
+  applyQuestCommand(c, { type: 'close' });
+  for (let i = 0; i < 3; i++) {
+    const enemy = mob(c, 700 + i * 20, 600, 1);
+    applyDamage(c, enemy, 50, c.player);
+  }
+  c.world.flush();
+  assert.equal(questProgress(c), 3);
+  applyQuestCommand(c, { type: 'talk', npc: herald });
+  applyQuestCommand(c, { type: 'report' });
+  assert.equal(j.stage, 'pilgrimage');
+  assert.equal(j.level, 2);
+  const before = JSON.stringify(j);
+  applyQuestCommand(c, { type: 'report' });
+  assert.equal(JSON.stringify(j), before);
+});
+test('priest reward is atomic when bags are full, grants four real armor items once and restores stats', () => {
+  const c = arena(),
+    priest = addNpc(c, 'priest', 1936, 1648),
+    j = c.s.journal.get(c.player)!;
+  j.stage = 'pilgrimage';
+  c.world.setPos(c.player, { x: 1936, y: 1600 });
+  inv(c).slots = inv(c).slots.map(() => ({ id: 'wood', count: 64 }));
+  applyQuestCommand(c, { type: 'talk', npc: priest });
+  const before = JSON.stringify(inv(c));
+  applyQuestCommand(c, { type: 'bless' });
+  assert.equal(j.stage, 'pilgrimage');
+  assert.equal(JSON.stringify(inv(c)), before);
+  for (let i = 32; i < 36; i++) inv(c).slots[i] = null;
+  player(c).mana = 1;
+  c.s.health.get(c.player)!.hp = 1;
+  applyQuestCommand(c, { type: 'bless' });
+  assert.equal(j.stage, 'complete');
+  assert.deepEqual(
+    inv(c)
+      .slots.slice(32)
+      .map((i) => i?.id),
+    ['sanctum_head', 'sanctum_chest', 'sanctum_legs', 'sanctum_boots'],
+  );
+  assert.equal(player(c).mana, player(c).maxMana);
+  assert.equal(c.s.health.get(c.player)!.hp, c.s.health.get(c.player)!.max);
+  const saved = JSON.stringify({ inv: inv(c), j });
+  applyQuestCommand(c, { type: 'bless' });
+  assert.equal(JSON.stringify({ inv: inv(c), j }), saved);
+  assert.deepEqual(JSON.parse(JSON.stringify(j)), j);
+});
+test('experience levels use rising thresholds and raise real maximum health and mana', () => {
+  const c = arena(),
+    j = c.s.journal.get(c.player)!;
+  grantXp(c, levelRequirement(1) + levelRequirement(2) + 4);
+  assert.equal(j.level, 3);
+  assert.equal(j.xp, 4);
+  assert.equal(c.s.health.get(c.player)!.max, 132);
+  assert.equal(player(c).maxMana, 106);
+  assert.ok(
+    c.world
+      .drain()
+      .some((e) => e.kind === 'notice' && e.text?.includes('等级 3')),
+  );
 });

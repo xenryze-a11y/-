@@ -1,7 +1,11 @@
 /** 内容表：道具与技能数值统一在这里，系统不认识 DOM / Pixi。 */
 export type SkillId = 'ember' | 'frost' | 'storm' | 'ward' | 'blink';
 export type AbilityId = SkillId | 'basketball';
+export type ArmorItemId =
+  | `${'iron' | 'leather' | 'sanctum'}_${'head' | 'chest' | 'legs'}`
+  | 'sanctum_boots';
 export type ItemId =
+  | ArmorItemId
   | SkillId
   | 'basketball'
   | 'sword'
@@ -24,7 +28,10 @@ export interface ItemDefinition {
     | 'potion'
     | 'material'
     | 'supply'
-    | 'boots';
+    | 'boots'
+    | 'armor';
+  armorSlot?: 'head' | 'chest' | 'legs';
+  armorMat?: 'leather' | 'iron' | 'sanctum';
   stack: number;
   color: string;
   desc: string;
@@ -111,20 +118,45 @@ export const MAGIC = {
   blinkRange: 140,
   blinkInvuln: 0.25,
 };
+const ARMOR_ITEMS = {} as Record<ArmorItemId, ItemDefinition>;
+for (const mat of ['leather', 'iron', 'sanctum'] as const)
+  for (const slot of ['head', 'chest', 'legs'] as const) {
+    const name =
+      { leather: '皮革', iron: '铁甲', sanctum: '晨曦' }[mat] +
+      { head: '头盔', chest: '胸甲', legs: '护腿' }[slot];
+    ARMOR_ITEMS[`${mat}_${slot}`] = {
+      name,
+      kind: 'armor',
+      stack: 1,
+      color:
+        mat === 'sanctum' ? '#e4d49a' : mat === 'iron' ? '#c0cbd1' : '#bd946b',
+      armorSlot: slot,
+      armorMat: mat,
+      desc: `放入${{ head: '头盔', chest: '胸甲', legs: '护腿' }[slot]}装备格，四方向与动作同步。`,
+    };
+  }
+ARMOR_ITEMS.sanctum_boots = {
+  name: '晨曦圣靴',
+  kind: 'boots',
+  stack: 1,
+  color: '#e4d49a',
+  desc: '晨曦套装的靴子；四件齐全时每秒额外恢复 2 法力。',
+};
 export const ITEMS: Record<ItemId, ItemDefinition> = {
+  ...ARMOR_ITEMS,
   ember: {
     name: '余烬法杖',
     kind: 'staff',
     stack: 1,
     color: '#f3a361',
-    desc: '普攻：爆裂火球 · 特殊技：三重炎矢\n命中后爆炸，对附近敌人造成伤害。',
+    desc: '普攻：爆裂火球\nQ 余烬护环 · F 炎枪齐射 · R 陨火天灾。',
   },
   frost: {
     name: '霜晶法杖',
     kind: 'staff',
     stack: 1,
     color: '#91dce4',
-    desc: '普攻：寒冰箭 · 特殊技：冰霜新星\n冰箭减速，新星短暂冻结附近敌人。',
+    desc: '普攻：寒冰箭\nQ 冰晶新星 · F 极寒穿刺 · R 绝冬风暴。',
   },
   storm: {
     name: '雷电法杖',
@@ -138,14 +170,14 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     kind: 'staff',
     stack: 1,
     color: '#a2e3bd',
-    desc: '普攻：奥术弹 · 特殊技：星辉护盾\n护盾持续 4 秒，抵御伤害并震退近敌。',
+    desc: '普攻：奥术弹\nQ 星辉护盾 · F 星轨回响 · R 星辉审判。',
   },
   blink: {
     name: '虚空法杖',
     kind: 'staff',
     stack: 1,
     color: '#baa5f2',
-    desc: '普攻：穿刺秘矢 · 特殊技：相位闪烁\n沿瞄准方向短距闪烁，遇墙停下。',
+    desc: '普攻：穿刺秘矢\nQ 相位闪烁 · F 裂隙飞刃 · R 虚空坍缩。',
   },
   basketball: {
     name: '坤影篮球',

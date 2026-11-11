@@ -7,7 +7,15 @@
  * 表现状态（走路相位、混合、上一帧位置、渲染时钟）全部存在 AvatarView / WorldView 里，
  * 绝不写回 ECS —— 这条隔离是以后接服务端权威 / 回放的前提。
  */
-import { Container, Sprite, Texture } from 'pixi.js';
+import { Container, Sprite, Texture, Text } from 'pixi.js';
+import { BlockAvatar } from '../game/block-avatar';
+import { SanctuaryView } from '../game/sanctuary-view';
+import {
+  NPCS,
+  SANCTUARY,
+  inCathedral,
+  onCathedral,
+} from '../game/sanctuary-data';
 import type { TextureAtlas } from './atlas';
 import { ANCHOR_Y, shoeSpriteName } from './art';
 import { LAYER } from './layers';
@@ -53,6 +61,8 @@ interface EntityView {
   sprite?: Sprite;
   parts?: Parts;
   visualAngle?: number;
+  block?: BlockAvatar;
+  npcLabel?: Text;
 }
 
 const BODY_ANCHOR_Y = ANCHOR_Y / 48;
@@ -64,6 +74,9 @@ export class WorldView {
   readonly entityLayer = new Container();
   readonly fxLayer = new Container();
   readonly lightLayer = new Container();
+  readonly roofLayer = new Container();
+  readonly buildingFrontLayer = new Container();
+  readonly sanctuary: SanctuaryView;
   readonly walls: {
     sprite: Sprite;
     x: number;
@@ -81,23 +94,28 @@ export class WorldView {
   constructor(private readonly atlas: TextureAtlas) {
     // 地面 → 血迹 → 火光 → 实体与墙（共用脚底深度）→ 特效。
     this.entityLayer.sortableChildren = true;
+    this.buildingFrontLayer.sortableChildren = true;
     this.root.addChild(
       this.groundLayer,
       this.decalLayer,
       this.lightLayer,
       this.entityLayer,
       this.fxLayer,
+      this.roofLayer,
+      this.buildingFrontLayer,
     );
+    this.sanctuary = new SanctuaryView(atlas, this.groundLayer, this.roofLayer);
   }
 
   setScene(scene: Scene): void {
     for (const v of this.views.values()) {
-      this.entityLayer.removeChild(v.root);
+      v.root.removeFromParent();
       v.root.destroy({ children: true }); // 贴图是共享图集，绝不能 destroy texture
     }
     this.views.clear();
     this.rebuildGround(scene);
     this.rebuildWalls(scene);
+    this.sanctuary.reset();
   }
 
   private rebuildGround(scene: Scene): void {
@@ -188,7 +206,7 @@ export class WorldView {
       }
     this.groundSprite = new Sprite(Texture.from(c, true));
     this.groundSprite.texture.source.style.scaleMode = 'nearest';
-    this.groundLayer.addChild(this.groundSprite);
+    this.groundLayer.addChildAt(this.groundSprite, 0);
   }
   /** 墙脚和人物脚底共用同一排序，不能把南墙整张烘焙在最高层。 */
   private rebuildWalls(scene: Scene): void {
@@ -236,19 +254,49 @@ export class WorldView {
         this.views.set(e, v);
         this.entityLayer.addChild(v.root);
       }
+      // 南立面前的角色按脚底站在屋面前；不能为露出头部而把屋顶从外面变透明。
+      const church = SANCTUARY.cathedral,
+        front =
+          p.y >= church.y + church.h &&
+          p.x >= church.x - 40 &&
+          p.x <= church.x + church.w + 40,
+        targetLayer = front ? this.buildingFrontLayer : this.entityLayer;
+      if (v.root.parent !== targetLayer) targetLayer.addChild(v.root);
       v.root.position.set(p.x, p.y);
       // 伪深度：脚底越靠下（y 越大）越后画。
       v.root.zIndex = p.y;
-      if (v.parts) this.updateAvatar(v, e, look, scene, dt);
+      v.root.visible =
+        e === scene.player ||
+        !inCathedral(p) ||
+        inCathedral(world.pos(scene.player));
+      if (v.block) v.block.sync(scene, e, dt);
+      else if (v.parts) this.updateAvatar(v, e, look, scene, dt);
       else if (v.sprite) this.updateStatic(v.sprite, e, look, scene);
+      const npc = s.npc.get(e);
+      if (npc && !v.npcLabel) {
+        const def = NPCS[npc.kind];
+        v.npcLabel = new Text({
+          text: def.name,
+          style: {
+            fontFamily: 'system-ui',
+            fontSize: 9,
+            fill: 0xe8dfb2,
+            stroke: { color: 0x20352e, width: 3 },
+          },
+        });
+        v.npcLabel.anchor.set(0.5, 1);
+        v.npcLabel.y = npc.kind === 'herald' ? -92 : 15;
+        v.root.addChild(v.npcLabel);
+      }
     });
 
     for (const [e, v] of this.views) {
       if (seen.has(e)) continue;
-      this.entityLayer.removeChild(v.root);
+      v.root.removeFromParent();
       v.root.destroy({ children: true });
       this.views.delete(e);
     }
+    this.sanctuary.sync(scene, dt);
     const player = world.pos(scene.player);
     for (const wall of this.walls) {
       const hides =
@@ -257,7 +305,13 @@ export class WorldView {
         player.x > wall.x - 13 &&
         player.x < wall.x + 45;
       wall.alpha +=
-        ((hides ? 0.22 : 1) - wall.alpha) * (1 - Math.exp(-14 * dt));
+        ((onCathedral({ x: wall.x + 16, y: wall.y + 16 }) && inCathedral(player)
+          ? 0.35
+          : hides
+            ? 0.22
+            : 1) -
+          wall.alpha) *
+        (1 - Math.exp(-14 * dt));
       wall.sprite.alpha = wall.alpha;
     }
     for (const [id, v] of this.views)
@@ -275,7 +329,8 @@ export class WorldView {
       }
     const aliveLights = new Set<number>();
     s.prop.forEach((id, prop) => {
-      if (prop.sprite !== 'propTorch') return;
+      if (prop.sprite !== 'propTorch' && prop.sprite !== 'propChurchCandles')
+        return;
       aliveLights.add(id);
       let light = this.lights.get(id);
       if (!light) {
@@ -286,6 +341,7 @@ export class WorldView {
         this.lights.set(id, light);
       }
       const p = world.pos(id);
+      light.visible = !inCathedral(p) || inCathedral(player);
       light.position.set(p.x, p.y - 8);
       light.scale.set(1, 0.7);
       light.alpha = 0.7 + Math.sin(this.renderTime * 7 + id) * 0.1;
@@ -298,6 +354,10 @@ export class WorldView {
   }
 
   private createView(look: Look): EntityView {
+    if (look.family === 'hero') {
+      const block = new BlockAvatar(this.atlas);
+      return { root: block.root, look, pose: block.pose, block };
+    }
     const root = new Container();
     const view: EntityView = { root, look, pose: newLimbPose() };
     if (look.staticSprite) {
@@ -309,11 +369,13 @@ export class WorldView {
         0.5,
         tree
           ? (sprite.texture.frame.height - 2) / sprite.texture.frame.height
-          : look.staticSprite === 'propAltar'
-            ? 94 / 96
-            : look.family === 'prop'
-              ? 0.88
-              : 0.5,
+          : look.staticSprite?.startsWith('propChurch')
+            ? (sprite.texture.frame.height - 2) / sprite.texture.frame.height
+            : look.staticSprite === 'propAltar'
+              ? 94 / 96
+              : look.family === 'prop'
+                ? 0.88
+                : 0.5,
       );
       sprite.zIndex = look.family === 'prop' ? LAYER.BODY : LAYER.FX;
       if (look.family === 'summon') {
@@ -579,6 +641,13 @@ export class WorldView {
     scene: Scene,
   ): void {
     const { s } = scene;
+    const npc = s.npc.get(e);
+    if (npc) {
+      sprite.anchor.set(0.5, npc.kind === 'herald' ? 94 / 112 : 60 / 64);
+      sprite.y =
+        npc.kind === 'herald' ? -3 - Math.sin(this.renderTime * 1.8) * 2 : 0;
+      return;
+    }
     const summon = s.summon.get(e);
     if (summon) {
       sprite.texture = this.atlas.get(

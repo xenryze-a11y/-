@@ -28,3 +28,7 @@
 ## 四系十二技能图标
 
 `source/all-staff-icons-generated.png` 是新生成的 1448×1086 像素原稿，列为 ember / frost / ward / blink，行为 Q / F / R。`scripts/prepare-staff-icons.cjs` 通过浏览器 Canvas 最近邻、硬透明和 17 级距量化得到 `staff-icons.png`（256×192）。原稿不进运行包；图标在 `staff-art.ts` 合入唯一图集，十二帧与原雷电三帧共组成十五技能。未声称来自尚未确认的魔女 RPG。
+
+## 当前树与圣域改为程序绘制
+
+按用户最新要求，普通树和神树不再使用 grove-trees.png。该小图与 source/trees-generated.png 仅保留历史参考，运行包不导入它们。sanctuary-art.ts 提供树、哥特教堂、圣使、神父和家具的程序化像素绘制；block-art.ts 按材质生成四方向装备部件，无新增生图素材。grove-art.ts 的内嵌加载仅保留原雷电职业图标。

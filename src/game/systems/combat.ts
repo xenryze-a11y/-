@@ -4,7 +4,9 @@
  */
 import { angleDiff, dist, fromAngle, type Vec2 } from '../../engine/math';
 import { CFG } from '../data';
-import { INVENTORY } from '../items';
+import { armorReduction } from '../armor';
+import { grantXp } from './quests';
+import { SANCTUARY } from '../sanctuary-data';
 import { spawnDrop } from './loot';
 import { TAG, type Projectile } from '../components';
 import type { Ctx } from './context';
@@ -25,8 +27,7 @@ export function applyDamage(
   if ((pl && pl.invuln > 0) || (dodge && dodge.invuln > 0)) return;
 
   if (pl) {
-    if (ctx.s.equip.get(target)?.shoes === 'iron')
-      raw = Math.max(1, raw - INVENTORY.ironReduction);
+    raw = Math.max(1, raw - armorReduction(ctx.s.equip.get(target)));
     if (pl.shield > 0 && pl.shieldHp > 0) {
       const absorbed = Math.min(raw, pl.shieldHp);
       pl.shieldHp -= absorbed;
@@ -86,7 +87,10 @@ export function applyDamage(
     );
   } else if (ctx.world.hasTag(target, TAG.MOB)) {
     const killer = ctx.s.player.get(ctx.player);
-    if (killer && ctx.world.hasTag(from, TAG.PLAYER)) killer.kills++;
+    if (killer && ctx.world.hasTag(from, TAG.PLAYER)) {
+      killer.kills++;
+      grantXp(ctx, SANCTUARY.killXp);
+    }
     spawnDrop(ctx, p.x, p.y, ctx.world.rng() < 0.55 ? 'crystal' : 'herb');
     if (ctx.world.rng() < 0.22)
       spawnDrop(ctx, p.x, p.y, ctx.world.rng() < 0.5 ? 'mana' : 'health');

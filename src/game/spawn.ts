@@ -5,6 +5,7 @@ import { makeRng, type Vec2 } from '../engine/math';
 import { createStores, TAG, type MobKind, type Stores } from './components';
 import { createInventory } from './inventory';
 import { createGroveLevel, groveClearance } from './grove';
+import { SANCTUARY, NPCS } from './sanctuary-data';
 import { GROVE } from './mage-data';
 import { spawnDrop } from './systems/loot';
 import { CFG } from './data';
@@ -80,7 +81,19 @@ export function buildScene(seed = CFG.seed): Scene {
     showHealth: false,
     animated: true,
   });
-  s.equip.set(player, { shoes: 'leather' });
+  s.equip.set(player, {
+    shoes: 'leather',
+    head: 'none',
+    chest: 'leather',
+    legs: 'leather',
+  });
+  s.journal.set(player, {
+    stage: 'unmet',
+    killsAtStart: 0,
+    talking: 0,
+    level: 1,
+    xp: 0,
+  });
   s.inventory.set(player, createInventory());
   s.mage.set(player, {
     schools: {
@@ -186,6 +199,63 @@ export function buildScene(seed = CFG.seed): Scene {
       animated: false,
       staticSprite: def.sprite,
     });
+  }
+  // 教堂家具是独立地面实体，屋面只遮挡显示，不能代替真正的墙与座椅碰撞。
+  const furniture = (
+    sprite: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r = 0,
+  ) => {
+    const id = world.createAt([TAG.PROP], x, y);
+    s.prop.set(id, { sprite, w, h, blocks: r > 0 });
+    if (r) {
+      s.radius.set(id, { r });
+      level.addBlocker(x, y, r);
+    }
+    s.look.set(id, {
+      family: 'prop',
+      scale: 1,
+      animated: false,
+      showHealth: false,
+      staticSprite: sprite,
+    });
+  };
+  for (const y of [39.5, 42.5, 45.5, 48.5])
+    for (const x of [56.5, 64.5]) {
+      furniture('propChurchPew', x * TILE, y * TILE, 88, 44, 20);
+      level.addBlocker(x * TILE - 25, y * TILE, 13);
+      level.addBlocker(x * TILE + 25, y * TILE, 13);
+    }
+  for (const y of [38.5, 42.5, 46.5, 50.5])
+    for (const x of [54.5, 66.5])
+      furniture('propChurchColumn', x * TILE, y * TILE, 40, 104, 12);
+  for (const y of [36.5, 53])
+    for (const x of [56.5, 64.5])
+      furniture('propChurchCandles', x * TILE, y * TILE, 32, 48);
+  furniture(
+    'propChurchAltar',
+    SANCTUARY.altar.x,
+    SANCTUARY.altar.y,
+    112,
+    72,
+    22,
+  );
+  for (const kind of ['herald', 'priest'] as const) {
+    const at = SANCTUARY[kind],
+      id = world.createAt([TAG.NPC], at.x, at.y);
+    s.npc.set(id, { kind });
+    s.look.set(id, {
+      family: 'npc',
+      scale: 1,
+      animated: false,
+      showHealth: false,
+      staticSprite: NPCS[kind].sprite,
+    });
+    s.radius.set(id, { r: 10 });
+    level.addBlocker(at.x, at.y, 10);
   }
   const staff = spawnDrop(
     { world, s },

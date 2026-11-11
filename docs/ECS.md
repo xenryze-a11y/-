@@ -151,3 +151,12 @@ updatePoison(ctx, fixed);
 MageState.schools 分别保存 ember / frost / ward / blink 的 unlocked 和三项 cooldown，雷电原字段保留。profession.ts 提供统一释放入口与只读查询。StaffZone 保存 owner / school / kind / life / tick / phase / radius；StaffShot 保存速度、生命周期、伤害、穿透次数、已命中列表与回旋状态；FallingMeteor 保存延迟和爆炸参数，均为纯数据。灼烧计时存在 Mob.burn / burnTick。
 
 updateStaffArts 顺序为解锁扫描 → 扫掠弹道 → 陨石落地 → 区域 / 牵引 / 坍缩 → 灼烧。独立 Store 不在遍历中删除。不同法杖可同时留下效果；区域≤28、弹道≤48、陨石≤18，超额施法不消耗法力、不启动冷却。表现只读这些状态和 staffArt 标量事件。详见 STAFF_PROFESSIONS.md。
+
+
+## NPC、任务、升级和四部位装备
+
+Npc 只含 kind，无 damageable 标签；Journal 保存 stage / killsAtStart / talking / level / xp。QuestCommand 由组装层调用 quests.ts，先验证距离、视线和建筑内外一致；UI 不直接设置阶段或奖励。击杀出口给经验，任务给经验 / 四件套；领取时在副本上按存储格优先试放四件，全部成功才提交，重复领取无效。等级阈值和属性成长集中于 sanctuary-data.ts。
+
+InventoryState 新增 armor.head / chest / legs，保留 boots、合成与36格；装备格索引 42 / 43 / 44，40仍为鞋，41仅用于合成产出。Equip 新增材质字段，护甲减伤统一进入 applyDamage；晨曦完整套装回蓝只在 tickTimers 推进。
+
+建筑的墙 / 门是 Level 瓦片，家具和 NPC 注册阻挡，屋面透明不改变碰撞。inCathedral 统一决定内外状态，SanctuaryView / renderer 只读此函数来隐藏屋顶和内部实体；对话规则也使用同一界限，不能从墙外透视神父后直接领取奖励。

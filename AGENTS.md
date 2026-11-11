@@ -41,7 +41,8 @@ npm run dev        # http://127.0.0.1:5173
 2. **系统顺序在 `main.ts` 定死**：`applyInput（攻击判定）→ tickTimers（冷却）→ updateAI → updateProjectiles → updateFields → updateMage → updateStaffArts → updateSummons → updateRules → flush`。冷却必须在攻击判定**之后**推进，否则同一帧能打两次。
 3. **位置只经 `world.setPos()`**（同步空间哈希）；**删除只经 `world.destroy()`**（排队到 `flush`）。遍历 Store 时不能删。
 4. **走路相位跟「实际位移」**，不跟时间、不读输入向量。贴墙不踏步、慢走不打滑、以后接联机才对。
-5. **`Side` 是独立画法，手脚是运行时悬浮的，鞋按材质换装**：不要把正面的并排腿、同色手臂、靴子塞回侧视贴图，不要给手做 360° 连续插值；侧视**兜帽/头发要盖满整个头顶和额头**（和正面同宽），只盖后脑左半会变成秃头。
+5. **四方向仍为 front / back / side + 左向镜像**。玩家按用户最新要求改为 `block-rig / block-avatar` 模块化方块骨架，头、躯干、单节臂 / 腿、手与鞋独立；套装只换材质帧，不改挂点。旧怪物仍使用悬浮手脚，侧视独立绘制；不能把正面两腿复用为侧面，也不能让 UI 预览另造一套骨架。
+
 
 ## 改之前先问：`engine/` 还是 `game/`？
 
@@ -49,7 +50,7 @@ npm run dev        # http://127.0.0.1:5173
 
 | 内容 | 放哪 |
 |---|---|
-| 数值、刷怪数、材质清单 | `game/data.ts` / `game/items.ts`（**内容即数据**，别硬编码进逻辑） |
+| 数值、刷怪数、材质清单 | `game/data.ts` / `game/items.ts` / `game/sanctuary-data.ts`（**内容即数据**，别硬编码进逻辑） |
 | 规则（判定、冷却、AI） | `src/game/systems/` 或 `src/engine/` 的通用部分 |
 | 表现（特效、HUD、配色） | `src/game/` |
 | 机制（碰撞、存储、相机数学） | `src/engine/` |

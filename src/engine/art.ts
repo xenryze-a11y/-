@@ -17,6 +17,7 @@ import {
   detailProp,
   upgradeSpecs,
 } from '../game/art-upgrade';
+import { drawForestTree } from '../game/sanctuary-art';
 import { makeRng } from './math';
 import { PALETTE as P, SHOE_MATERIALS } from '../game/data';
 
@@ -469,6 +470,12 @@ const SHOE_COLORS: Record<
     light: '#9a7450',
     sole: '#2f2118',
   },
+  sanctum: {
+    dark: '#526c68',
+    mid: '#adbda1',
+    light: '#f0e8c4',
+    sole: '#34483f',
+  },
   iron: { dark: P.ironDark, mid: P.iron, light: '#d5dce0', sole: '#3d454b' },
   zombieBare: {
     dark: '#4a5c3d',
@@ -687,7 +694,10 @@ function buildSpecs(): Spec[] {
       w,
       h,
       draw: (p) => {
-        if (kind === 'tree') p.ctx.scale(2, 2);
+        if (kind === 'tree') {
+          drawForestTree(p);
+          return;
+        }
         drawProp(p, kind, hash(kind));
         detailProp(p, kind, hash(kind));
       },

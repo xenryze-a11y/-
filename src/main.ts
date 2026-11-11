@@ -20,6 +20,7 @@ import { tickTimers } from './game/systems/timers';
 import { updateAI } from './game/systems/ai';
 import { updateProjectiles } from './game/systems/projectile';
 import { updateFields, castSelected } from './game/systems/magic';
+import { applyQuestCommand, type QuestCommand } from './game/systems/quests';
 import { updateStaffArts } from './game/systems/staff-arts';
 import { castStaffAbility } from './game/systems/profession';
 import { updateMage, castMage } from './game/systems/mage';
@@ -107,6 +108,13 @@ async function boot(): Promise<void> {
   const ui = new GameUI(atlas, input, () => ctx, {
     command: (cmd) => commands.push(cmd),
     inventory: setInventory,
+    quest: (command) => {
+      if (!ui.running || ui.menuOpen || ui.inventoryOpen) return;
+      applyQuestCommand(ctx, command);
+      input.reset();
+      pendingEdges = 0;
+      loop.reset();
+    },
     restart,
   });
   window.addEventListener('resize', () => {
@@ -217,6 +225,7 @@ async function boot(): Promise<void> {
         applyInventoryCommand(ctx, cmd);
       },
       inventory: setInventory,
+      quest: (command: QuestCommand) => applyQuestCommand(ctx, command),
       cast: (special = false) => castSelected(ctx, special),
       mage: (ability: MageSkillId) => castMage(ctx, ability),
       staff: (ability: MageSkillId) => castStaffAbility(ctx, ability),

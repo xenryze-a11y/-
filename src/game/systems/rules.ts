@@ -1,4 +1,5 @@
 /** 规则层：拾取 + 缓慢补怪，让 demo 一直有东西可打。 */
+import { onCathedral } from '../sanctuary-data';
 import { TILE } from '../../engine/level';
 import { TAG, type MobKind } from '../components';
 import { addItem, notice } from '../inventory';
@@ -62,7 +63,7 @@ function spawnOne(ctx: Ctx): void {
       y > ctx.level.pixelH - TILE * 2
     )
       continue;
-    if (ctx.level.blocked(x, y, 14)) continue;
+    if (ctx.level.blocked(x, y, 14) || onCathedral({ x, y }, 32)) continue;
 
     const kinds: MobKind[] = ['shamble', 'shamble', 'lunge', 'caster'];
     const kind = kinds[Math.floor(ctx.world.rng() * kinds.length)];
