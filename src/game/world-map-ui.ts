@@ -95,20 +95,34 @@ export class WorldMapUI {
         ? '此界石已记录。沿道路向南寻找并激活另一处界石，即可往返。'
         : '界石共鸣中 · 选择已激活的目的地'
       : '在已激活界石旁、脱离战斗后可传送。按 C 激活沿途界石。';
-    for (const d of SITES.filter((s) => s.kind === 'waypoint')) {
+    for (const d of SITES.filter(
+      (s) =>
+        s.kind === 'waypoint' &&
+        (ctx.progress.discovered.includes(s.id) ||
+          ctx.progress.waypoints.includes(s.id)),
+    )) {
       const button = document.createElement('button'),
         known = ctx.progress.waypoints.includes(d.id);
       button.className = 'av-map-travel';
       button.dataset.travel = d.id;
       button.textContent = known
         ? d.name + (here?.definition.id === d.id ? ' · 当前位置' : ' · 传送')
-        : '未激活的界石';
+        : d.name + ' · 尚未激活';
       button.disabled = !known || !can || here?.definition.id === d.id;
       button.onclick = () => {
         this.command({ type: 'travel', id: d.id });
         if (this.opened) this.refresh();
       };
       portals.append(button);
+    }
+    const unknown = SITES.filter(
+      (s) => s.kind === 'waypoint' && !ctx.progress.discovered.includes(s.id),
+    ).length;
+    if (unknown) {
+      const hint = document.createElement('p');
+      hint.className = 'av-map-legend';
+      hint.textContent = `继续探索 · 尚有 ${unknown} 处界石待发现`;
+      portals.append(hint);
     }
     const list = this.q('#av-map-sites');
     list.replaceChildren();

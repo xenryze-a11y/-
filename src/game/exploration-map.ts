@@ -16,32 +16,66 @@ const tileColors: Record<number, string> = {
   [Tile.FLOOR]: '#9b8c66',
   [Tile.WALL]: '#a3a18d',
   [Tile.ROAD]: '#b19d6e',
+  [Tile.CLIFF]: '#394b47',
+  [Tile.STAIRS]: '#c2c5a0',
 };
+const terrainCache = new WeakMap<
+  HTMLCanvasElement,
+  {
+    level: Ctx['level'];
+    progress: Ctx['progress'];
+    revision: number;
+    fog: number;
+    image: HTMLCanvasElement;
+  }
+>();
 export function drawExplorationMap(canvas: HTMLCanvasElement, ctx: Ctx): void {
   const g = canvas.getContext('2d')!,
     level = ctx.level,
     sx = canvas.width / level.pixelW,
     sy = canvas.height / level.pixelH;
   g.imageSmoothingEnabled = false;
-  g.fillStyle = '#091512';
-  g.fillRect(0, 0, canvas.width, canvas.height);
-  for (let y = 0; y < level.h; y++)
-    for (let x = 0; x < level.w; x++) {
-      const p = { x: (x + 0.5) * 32, y: (y + 0.5) * 32 };
-      if (!exploredAt(ctx, p)) continue;
-      const tile = level.at(x, y),
-        region = regionAt(p);
-      g.fillStyle =
-        tile === Tile.GRASS && region === 'forest'
-          ? '#414958'
-          : tileColors[tile];
-      g.fillRect(
-        x * 32 * sx,
-        y * 32 * sy,
-        Math.ceil(32 * sx),
-        Math.ceil(32 * sy),
-      );
-    }
+  let cached = terrainCache.get(canvas);
+  if (
+    !cached ||
+    cached.level !== level ||
+    cached.progress !== ctx.progress ||
+    cached.revision !== level.revision ||
+    cached.fog !== ctx.progress.explored.length
+  ) {
+    const image = document.createElement('canvas');
+    image.width = canvas.width;
+    image.height = canvas.height;
+    const bg = image.getContext('2d')!;
+    bg.fillStyle = '#091512';
+    bg.fillRect(0, 0, image.width, image.height);
+    for (let y = 0; y < level.h; y++)
+      for (let x = 0; x < level.w; x++) {
+        const p = { x: (x + 0.5) * 32, y: (y + 0.5) * 32 };
+        if (!exploredAt(ctx, p)) continue;
+        const tile = level.at(x, y),
+          region = regionAt(p);
+        bg.fillStyle =
+          tile === Tile.GRASS && region === 'forest'
+            ? '#414958'
+            : tileColors[tile];
+        bg.fillRect(
+          x * 32 * sx,
+          y * 32 * sy,
+          Math.ceil(32 * sx),
+          Math.ceil(32 * sy),
+        );
+      }
+    cached = {
+      level,
+      progress: ctx.progress,
+      revision: level.revision,
+      fog: ctx.progress.explored.length,
+      image,
+    };
+    terrainCache.set(canvas, cached);
+  }
+  g.drawImage(cached.image, 0, 0);
   const large = canvas.width > 300,
     sites = worldSites(ctx),
     player = ctx.world.pos(ctx.player);

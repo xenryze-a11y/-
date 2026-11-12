@@ -50,6 +50,8 @@ export interface UIActions {
   restart(grove?: boolean): void;
   quest(command: QuestCommand): void;
   interact(): void;
+  graphics(): string;
+  graphicsLabel(): string;
   explore(command: ExplorationCommand): void;
   saves: SaveActions;
   checkpoint(): void;
@@ -89,6 +91,7 @@ export class GameUI {
     this.preview();
     this.events();
     this.setTouch(this.touch);
+    this.q('#av-quality-button').textContent = actions.graphicsLabel();
     this.renderInventory();
     this.setMenu(true);
   }
@@ -562,6 +565,9 @@ export class GameUI {
     this.q('#av-recipes').onclick = () => this.setHelp(true);
     this.q('#av-close-help').onclick = () => this.setHelp(false);
     this.q('#av-touch-button').onclick = () => this.setTouch(!this.touch);
+    this.q('#av-quality-button').onclick = () => {
+      this.q('#av-quality-button').textContent = this.actions.graphics();
+    };
     this.q('#av-split').onclick = () => {
       this.split = !this.split;
       this.q('#av-split').classList.toggle('active', this.split);

@@ -17,6 +17,7 @@ import {
   detailProp,
   upgradeSpecs,
 } from '../game/art-upgrade';
+import { landscapeSpecs } from '../game/landscape-art';
 import { explorationSpecs } from '../game/exploration-art';
 import { drawForestTree } from '../game/sanctuary-art';
 import { makeRng } from './math';
@@ -762,7 +763,11 @@ function buildSpecs(): Spec[] {
       out.push({ name, w: size, h, draw: (p) => drawFx(p, kind, i, count) });
     }
   }
-  return out.concat(upgradeSpecs(drawProp, drawWeapon), explorationSpecs());
+  return out.concat(
+    upgradeSpecs(drawProp, drawWeapon),
+    explorationSpecs(),
+    landscapeSpecs(),
+  );
 }
 
 function hash(s: string): number {

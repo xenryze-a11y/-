@@ -44,7 +44,15 @@ function pathField(ctx: Ctx): Int16Array {
     ]) {
       const xx = x + dx,
         yy = y + dy;
-      if (xx < 1 || yy < 1 || xx >= l.w - 1 || yy >= l.h - 1) continue;
+      if (
+        xx < 1 ||
+        yy < 1 ||
+        xx >= l.w - 1 ||
+        yy >= l.h - 1 ||
+        Math.abs(xx - tx) > 30 ||
+        Math.abs(yy - ty) > 30
+      )
+        continue;
       const next = yy * l.w + xx;
       if (distances[next] >= 0 || l.blocked(xx * TILE + 16, yy * TILE + 16, 9))
         continue;
@@ -63,10 +71,10 @@ function pathField(ctx: Ctx): Int16Array {
 }
 export function updateAI(ctx: Ctx, dt: number): void {
   if (ctx.gameOver) return;
-  const ids = ctx.world.withTag(TAG.MOB),
-    player = ctx.world.pos(ctx.player),
+  const player = ctx.world.pos(ctx.player),
+    ids = ctx.world.query(player, 960, TAG.MOB),
     l = ctx.level,
-    field = pathField(ctx),
+    field = ids.length ? pathField(ctx) : new Int16Array(0),
     sep = new Map<number, Vec2>();
   for (let i = 0; i < ids.length; i++) {
     if (ctx.world.isPendingDeath(ids[i])) continue;

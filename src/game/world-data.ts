@@ -1,9 +1,10 @@
+import { newRoad } from './landscape-design';
 /** 区域、地标、危险与奖励共用一张内容表，坐标单位为瓦片。 */
 import type { Vec2 } from '../engine/math';
 import type { ItemId } from './items';
 export const WORLD = {
-  width: 128,
-  height: 96,
+  width: 256,
+  height: 192,
   fogCell: 128,
   sight: 260,
   interact: 76,
@@ -37,12 +38,14 @@ export const REGIONS = {
   },
 } as const;
 export function regionAt(p: Vec2): RegionId {
-  return p.x < 48 * 32 && p.y < 48 * 32
-    ? 'vale'
-    : p.x >= 48 * 32 && p.y < 64 * 32
-      ? 'sanctum'
-      : 'forest';
+  const x = p.x / 32,
+    y = p.y / 32;
+  if (x < 128 && y < 96)
+    return x < 48 && y < 48 ? 'vale' : x >= 48 && y < 64 ? 'sanctum' : 'forest';
+  if (x < 96 && y >= 96 && y < 160) return 'vale';
+  return x >= 128 && y < 128 ? 'sanctum' : 'forest';
 }
+
 export type SiteKind = 'waypoint' | 'camp' | 'vista' | 'cache' | 'shrine';
 export interface SiteDefinition {
   id: string;
@@ -322,6 +325,164 @@ export const SITES: SiteDefinition[] = [
     '借残留的钟声辨明南林归路。',
   ),
 ];
+SITES.push(
+  site(
+    'vale-southstone',
+    'vale',
+    '南谷界石',
+    'waypoint',
+    44,
+    117,
+    0,
+    0,
+    [],
+    '新谷地的回程界石，沿溪流与旧镇相连。',
+  ),
+  site(
+    'vale-orchard',
+    'vale',
+    '风花旧果园',
+    'camp',
+    23,
+    135,
+    0,
+    0,
+    [],
+    '果树围拢着一处温暖营地。',
+  ),
+  site(
+    'vale-terrace',
+    'vale',
+    '白岩眺台',
+    'vista',
+    70,
+    145,
+    0,
+    30,
+    [],
+    '沿石阶登上台地，远眺溪谷。',
+  ),
+  site(
+    'vale-mill',
+    'vale',
+    '溪畔旧磨坊',
+    'cache',
+    79,
+    112,
+    2,
+    42,
+    [
+      { id: 'sabre', count: 1 },
+      { id: 'health', count: 4 },
+    ],
+    '沿溪寻找遗箱，清除看守后取得月弧弯刃。',
+  ),
+  site(
+    'forest-deepstone',
+    'forest',
+    '幽林界石',
+    'waypoint',
+    151,
+    153,
+    0,
+    0,
+    [],
+    '密林深处的界石，连接远方的归路。',
+  ),
+  site(
+    'forest-hollow',
+    'forest',
+    '萤菌树洞',
+    'camp',
+    117,
+    175,
+    0,
+    0,
+    [],
+    '菌光映照的猎人歇脚地。',
+  ),
+  site(
+    'forest-depths',
+    'forest',
+    '沉根祀庭',
+    'shrine',
+    213,
+    164,
+    4,
+    90,
+    [
+      { id: 'crystal', count: 16 },
+      { id: 'health', count: 4 },
+    ],
+    '越过根桥与暗溪，清除腐化守卫。',
+  ),
+  site(
+    'forest-highwatch',
+    'forest',
+    '暮色林冠台',
+    'vista',
+    231,
+    136,
+    0,
+    45,
+    [],
+    '沿坡道走上高处，记录林间支路。',
+  ),
+  site(
+    'sanctum-farstone',
+    'sanctum',
+    '远庭界石',
+    'waypoint',
+    162,
+    47,
+    0,
+    0,
+    [],
+    '东方台地的回程坐标。',
+  ),
+  site(
+    'sanctum-highcourt',
+    'sanctum',
+    '苍穹祭台',
+    'shrine',
+    211,
+    31,
+    4,
+    100,
+    [
+      { id: 'mana', count: 8 },
+      { id: 'crystal', count: 16 },
+    ],
+    '经石阶走上祭台，唤醒并击退守卫。',
+  ),
+  site(
+    'sanctum-rose',
+    'sanctum',
+    '蔷薇废庭',
+    'vista',
+    221,
+    80,
+    0,
+    45,
+    [],
+    '残拱与花圃围成一处静谧眺望点。',
+  ),
+  site(
+    'sanctum-vault',
+    'sanctum',
+    '长阶圣藏',
+    'cache',
+    163,
+    107,
+    4,
+    95,
+    [
+      { id: 'basketball', count: 1 },
+      { id: 'mana', count: 5 },
+    ],
+    '沿长阶与回廊找到藏匣，取出坤影篮球。',
+  ),
+);
 export const SITE_NAMES: Record<SiteKind, string> = {
   waypoint: '界石',
   camp: '营地',
@@ -337,10 +498,14 @@ export const SITE_SPRITES: Record<SiteKind, string> = {
   shrine: 'landShrine',
 };
 export function roadClearance(x: number, y: number): boolean {
-  return (
-    (Math.abs(x - 24.5 * 32) < 60 && y > 47 * 32) ||
-    (Math.abs(y - 76.5 * 32) < 60 && x > 22 * 32) ||
-    (Math.abs(x - 110.5 * 32) < 60 && y > 28 * 32) ||
-    (Math.abs(y - 30.5 * 32) < 60 && x > 69 * 32)
-  );
+  const xx = x / 32,
+    yy = y / 32;
+  const old =
+    xx < 128 &&
+    yy < 96 &&
+    ((Math.abs(xx - 24.5) < 1.9 && yy > 47) ||
+      (Math.abs(yy - 76.5) < 1.9 && xx > 22) ||
+      (Math.abs(xx - 110.5) < 1.9 && yy > 28) ||
+      (Math.abs(yy - 30.5) < 1.9 && xx > 69));
+  return old || newRoad(xx, yy);
 }

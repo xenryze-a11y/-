@@ -15,6 +15,8 @@ export const Tile = {
   FLOOR: 4,
   WALL: 5,
   ROAD: 6,
+  CLIFF: 7,
+  STAIRS: 8,
 } as const;
 
 export type TileValue = (typeof Tile)[keyof typeof Tile];
@@ -28,6 +30,8 @@ export const TILE_SPRITE: Record<TileValue, string> = {
   [Tile.FLOOR]: 'tileFloor',
   [Tile.WALL]: 'tileWall',
   [Tile.ROAD]: 'tileRoad',
+  [Tile.CLIFF]: 'tileCliffRaised',
+  [Tile.STAIRS]: 'terrainStairs',
 };
 
 export interface Blocker {
@@ -51,6 +55,8 @@ export class Level {
   readonly southWalls: Uint8Array;
   readonly spawn: Vec2 = { x: 0, y: 0 };
   private readonly blockers: Blocker[] = [];
+  private readonly blockerCells = new Map<string, Set<Blocker>>();
+  private readonly blockerCellSize = 128;
   revision = 0;
 
   constructor(
@@ -82,7 +88,7 @@ export class Level {
     level.tiles.set(data.tiles);
     level.southWalls.set(data.southWalls);
     Object.assign(level.spawn, data.spawn);
-    level.blockers.push(...data.blockers.map((b) => ({ ...b })));
+    for (const b of data.blockers) level.addBlocker(b.x, b.y, b.r);
     level.revision = data.revision;
     return level;
   }
@@ -101,11 +107,20 @@ export class Level {
   }
 
   private solidTile(t: TileValue): boolean {
-    return t === Tile.WALL || t === Tile.WATER;
+    return t === Tile.WALL || t === Tile.WATER || t === Tile.CLIFF;
   }
 
   addBlocker(x: number, y: number, r: number): void {
-    this.blockers.push({ x, y, r });
+    const b = { x, y, r };
+    this.blockers.push(b);
+    this.visitBlockerCells(b, (key) => {
+      let bucket = this.blockerCells.get(key);
+      if (!bucket) {
+        bucket = new Set();
+        this.blockerCells.set(key, bucket);
+      }
+      bucket.add(b);
+    });
     this.revision++;
   }
 
@@ -114,15 +129,54 @@ export class Level {
       (b) => Math.hypot(b.x - x, b.y - y) < 0.01,
     );
     if (i >= 0) {
+      const b = this.blockers[i];
+      this.visitBlockerCells(b, (key) => {
+        const bucket = this.blockerCells.get(key);
+        bucket?.delete(b);
+        if (!bucket?.size) this.blockerCells.delete(key);
+      });
       this.blockers.splice(i, 1);
       this.revision++;
     }
   }
 
+  private visitBlockerCells(b: Blocker, visit: (key: string) => void): void {
+    const cell = this.blockerCellSize;
+    for (
+      let y = Math.floor((b.y - b.r) / cell);
+      y <= Math.floor((b.y + b.r) / cell);
+      y++
+    )
+      for (
+        let x = Math.floor((b.x - b.r) / cell);
+        x <= Math.floor((b.x + b.r) / cell);
+        x++
+      )
+        visit(`${x}:${y}`);
+  }
   blocked(x: number, y: number, r = 0): boolean {
     if (this.terrainBlocked(x, y, r)) return true;
     if (r <= 0) return false;
-    return this.blockers.some((b) => Math.hypot(x - b.x, y - b.y) < r + b.r);
+    const cell = this.blockerCellSize;
+    for (
+      let yy = Math.floor((y - r) / cell);
+      yy <= Math.floor((y + r) / cell);
+      yy++
+    )
+      for (
+        let xx = Math.floor((x - r) / cell);
+        xx <= Math.floor((x + r) / cell);
+        xx++
+      ) {
+        const bucket = this.blockerCells.get(`${xx}:${yy}`);
+        if (bucket)
+          for (const b of bucket) {
+            const dx = x - b.x,
+              dy = y - b.y;
+            if (dx * dx + dy * dy < (r + b.r) ** 2) return true;
+          }
+      }
+    return false;
   }
 
   /** 圆-AABB 最近点判定。r=0 要单独处理，否则恒假、投射物会穿墙。 */

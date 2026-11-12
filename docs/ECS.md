@@ -182,3 +182,6 @@ World.snapshot/restore 保存纯组件、实体分配器和 RNG 状态，快照�
 
 
 探索仍在 updateRules 阶段推进，不改固定系统顺序。Prop.landmark / Mob.site 绑定稳定内容 ID；发现、迷雾、休息与传送计时属于 Scene.progress。互动由 UI 发 ExplorationCommand，组装层调用 applyExplorationCommand；地图/地标视图只读，不得直接授予奖励、移动角色或清除迷雾。v2 加字段时同步存档白名单与 v1 迁移。
+
+
+大地图新增 CLIFF=7（阻挡及视线遮挡）、STAIRS=8（可通行），保存v3，Level恢复要重建阻挡体空间桶。渲染分块/裁剪/画质不写模拟；远处AI休眠以世界距离判断，不读渲染可见性。保存自有Scene可以走writeScene减少重复检查；write和导入仍按完整格式验证，缓存不能向外暴露可变的内部记录。

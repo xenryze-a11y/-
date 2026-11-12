@@ -80,9 +80,12 @@ export function applyDamage(
   const prop = ctx.s.prop.get(target);
   if (prop) {
     ctx.level.removeBlocker(p.x, p.y);
-    const wood = ['propTree', 'propBlightTree', 'propCrate'].includes(
-      prop.sprite,
-    );
+    const wood = [
+      'propTree',
+      'propBlightTree',
+      'propDeadTree',
+      'propCrate',
+    ].includes(prop.sprite);
     spawnDrop(
       ctx,
       p.x,

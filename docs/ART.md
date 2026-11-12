@@ -228,3 +228,8 @@ sanctum-ground.ts只选择显示材质，避开旧城镇、水和墙，保留碰
 ## 三域探索帧
 
 `game/exploration-art.ts` 提供 landWaystone/Camp/Chest/Vista/Shrine 及 Active 帧、propBlightTree、propRuinArch 和两张区域地面帧，统一加入现有图集。脚底/深度与既有 Prop 相同，激活和完成只在 WorldView 切材质帧，不改位置或物理。腐树复用遮挡淡出；拱门是可穿越的装饰，不在视觉门洞中间加阻挡。区域地面覆盖避开墙、水、道路、室内与原神树地面。
+
+
+## 四倍世界景观翻新
+
+当前探索道具和地表改为生图原稿后48色/半尺寸/硬透明/两倍最近邻，入口 `landscape-art.ts`，原稿和脚本说明见 [景观与性能](LANDSCAPES_AND_PERFORMANCE.md)。地标与新景物以帧底减2像素注册脚底，不能再用通用0.88锚点把根部悬空。地面只在512像素分块中烘焙，不能恢复8192整图。程序帧作为后备，已生成的小图覆盖同名帧，仍为一个图集源。
