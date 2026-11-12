@@ -1036,3 +1036,43 @@ button:focus-visible {
     height: 30px;
   }
 }
+
+/* 横屏入口跟随触控模式，圆键放在小地图下方，避开战斗手势。 */
+#av-landscape-button {
+  display: none;
+  position: absolute;
+  right: calc(24px + env(safe-area-inset-right, 0px));
+  top: calc(152px + env(safe-area-inset-top, 0px));
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid #a49b6b;
+  background: #16372ee8;
+  color: #e9dfb9;
+  font-size: 12px;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+.av-landscape-menu {
+  display: none;
+}
+.touch-mode #av-landscape-button {
+  display: block;
+}
+.touch-mode .av-landscape-menu {
+  display: inline-block;
+}
+#av-landscape-button:disabled,
+[data-landscape]:disabled {
+  opacity: 0.6;
+}
+@media (max-width: 800px), (max-height: 580px) {
+  #av-landscape-button {
+    top: calc(104px + env(safe-area-inset-top, 0px));
+    right: calc(14px + env(safe-area-inset-right, 0px));
+  }
+}
+#av-toast {
+  z-index: 100;
+}

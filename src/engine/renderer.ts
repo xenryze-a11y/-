@@ -1,5 +1,6 @@
 import { sanctumGroundFrame, SANCTUM_GARDENS } from '../game/sanctum-ground';
 import { landscapeGroundFrame } from '../game/landscape-art';
+import { drawCartoonGroundEdges } from '../game/cartoon-scene-art';
 import { SITES } from '../game/world-data';
 import { completedSite } from '../game/systems/exploration';
 import { GROVE } from '../game/mage-data';
@@ -271,7 +272,10 @@ export class WorldView {
           32,
           32,
         );
-        if (sanctum || generated) continue;
+        if (sanctum || generated) {
+          if (generated) drawCartoonGroundEdges(g, level, x, y);
+          continue;
+        }
         // Tile-local variations avoid a repeated carpet without introducing texture seams.
         const rng = makeRng(x * 73471 + y * 3571 + CFG.seed);
         if (tile === Tile.GRASS) {
@@ -376,7 +380,10 @@ export class WorldView {
             this.atlas.get(
               level.at(x, y) === Tile.CLIFF
                 ? 'tileCliffRaised'
-                : 'tileWallRaised' + ((x + y * 7) % 4),
+                : (onCathedral({ x: (x + 0.5) * TILE, y: (y + 0.5) * TILE })
+                    ? 'tileWallRaised'
+                    : 'tileCartoonWallRaised') +
+                    ((x + y * 7) % 4),
             ),
           );
           sprite.position.set(x * TILE, y * TILE - TILE);

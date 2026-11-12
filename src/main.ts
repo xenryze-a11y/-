@@ -77,7 +77,7 @@ async function boot(): Promise<void> {
   const atlas = await TextureAtlas.load();
   document.getElementById('boot')?.remove();
   const camera = new Camera();
-  camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+  camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
   camera.w = app.screen.width;
   camera.h = app.screen.height;
   const view = new WorldView(atlas),
@@ -348,7 +348,7 @@ async function boot(): Promise<void> {
     app.renderer.resize(innerWidth, innerHeight, resolution());
     camera.w = app.screen.width;
     camera.h = app.screen.height;
-    camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+    camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
   });
   app.ticker.add((ticker) => {
     const realDT = Math.min(ticker.deltaMS / 1000, 0.1);
@@ -403,7 +403,7 @@ async function boot(): Promise<void> {
         ensureEquipmentInstances(ctx);
       });
       const playerAt = ctx.world.pos(ctx.player);
-      camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+      camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
       camera.follow(playerAt, realDT);
       camera.update(realDT);
       present.update(realDT);

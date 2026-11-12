@@ -53,6 +53,13 @@ export function landscapeSpecs(): Spec[] {
       p.rect(0, 0, 32, 7, '#83966c');
     },
   });
+  for (let i = 0; i < 4; i++)
+    out.push({
+      name: 'tileCartoonWallRaised' + i,
+      w: 32,
+      h: 64,
+      draw: (p) => p.rect(0, 0, 32, 64, '#718b83'),
+    });
   return out;
 }
 export async function applyLandscapeArt(atlas: BuiltAtlas): Promise<boolean> {

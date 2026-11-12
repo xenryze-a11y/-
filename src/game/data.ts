@@ -133,7 +133,7 @@ export const CFG = {
     pickups: 10,
   },
 
-  camera: { zoom: 2 },
+  camera: { zoom: 1.65, touchZoom: 1.45 },
 
   /** 屏幕上一屏能看到的世界像素宽，用来定 HUD 与刷怪半径。 */
   view: { w: 0, h: 0 },

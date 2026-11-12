@@ -1,4 +1,5 @@
 import { applyLandscapeArt } from '../game/landscape-art';
+import { applyCartoonSceneArt } from '../game/cartoon-scene-art';
 import { applyRebuiltSanctumArt } from '../game/sanctum-rebuilt-art';
 /**
  * 图集加载与切帧。对应 goengine 的 backend/atlas.go + game/art/registry.go。
@@ -137,6 +138,7 @@ export class TextureAtlas {
     const sanctuaryReady = await applyGeneratedSanctuaryArt(built);
     const rebuiltReady = await applyRebuiltSanctumArt(built);
     await applyLandscapeArt(built);
+    applyCartoonSceneArt(built);
     if (
       external &&
       Object.entries(built.frames).every(

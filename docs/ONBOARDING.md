@@ -144,3 +144,5 @@ Q自动挥五下、每下发一浪；R七秒当前生命与上限翻倍，期间
 
 
 当前世界256×192，102项回归。大地图地表走 WorldView 分块缓存；原稿重像素化脚本为 `scripts/prepare-landscape-art.cjs`，运行包不引用原稿。布局/悬崖/阶梯与画质档位见 [LANDSCAPES_AND_PERFORMANCE.md](LANDSCAPES_AND_PERFORMANCE.md)。不要把屏外视图销毁当成删除模拟实体。
+
+当前普通场景材质以 `game/cartoon-scene-art.ts` 为最终覆盖入口；教堂/祭坛为保留帧。镜头缩放在 `CFG.camera`；手机横屏的浏览器显示行为在 `game/mobile-display.ts`，不改输入坐标或角色存档。见 [卡通场景与横屏](CARTOON_SCENE.md)。

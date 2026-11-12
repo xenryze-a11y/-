@@ -38,6 +38,7 @@ import {
 } from './inventory';
 import type { Ctx } from './systems/context';
 import { UI_TEMPLATE } from './ui-template';
+import { bindLandscapeButtons } from './mobile-display';
 import { SaveMenu, type SaveActions } from './save-menu';
 import './ui.css';
 import './mage-ui.css';
@@ -90,6 +91,7 @@ export class GameUI {
     this.makeMageIcons();
     this.preview();
     this.events();
+    bindLandscapeButtons(this.element, (message) => this.toast(message));
     this.setTouch(this.touch);
     this.q('#av-quality-button').textContent = actions.graphicsLabel();
     this.renderInventory();
