@@ -1,4 +1,5 @@
 /** 世界进度属于模拟；未来的探索/首领/净化节点使用稳定内容 ID。 */
+import type { RegionId } from './world-data';
 import type { Scene } from './spawn';
 import type { ItemStack, EquipmentInstance } from './inventory';
 import { ITEMS } from './items';
@@ -14,6 +15,14 @@ export interface AdventureProgress {
   openedChests: string[];
   purified: string[];
   bosses: string[];
+  worldVersion: number;
+  discovered: string[];
+  waypoints: string[];
+  startedSites: string[];
+  trackedSite: string;
+  lastRegion: RegionId | '';
+  campReadyAt: number;
+  travelReadyAt: number;
 }
 export function createProgress(
   seed: number,
@@ -30,6 +39,14 @@ export function createProgress(
     openedChests: [],
     purified: [],
     bosses: [],
+    worldVersion: 0,
+    discovered: [],
+    waypoints: [],
+    startedSites: [],
+    trackedSite: 'vale-waystone',
+    lastRegion: '',
+    campReadyAt: 0,
+    travelReadyAt: 0,
   };
 }
 

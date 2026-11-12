@@ -6,6 +6,11 @@ import { Input, BTN, type InputState } from './engine/input';
 import { FixedLoop } from './engine/loop';
 import { WorldView } from './engine/renderer';
 import { dist } from './engine/math';
+import {
+  applyExplorationCommand,
+  type ExplorationCommand,
+} from './game/systems/exploration';
+import { nearbyNpc } from './game/systems/quests';
 import { CFG } from './game/data';
 import { ensureEquipmentInstances } from './game/adventure';
 import {
@@ -42,20 +47,37 @@ import type { Ctx } from './game/systems/context';
 async function boot(): Promise<void> {
   const host = document.getElementById('app');
   if (!host) throw new Error('缺少 #app 容器');
+  let graphicsMode: 'auto' | 'power' | 'fine' = 'auto';
+  try {
+    const stored = localStorage.getItem('ashen-vale.graphics');
+    if (stored === 'power' || stored === 'fine') graphicsMode = stored;
+  } catch {
+    /* 存档不可用不妨碍画质选择 */
+  }
+  const resolution = (): number =>
+    graphicsMode === 'power'
+      ? 1
+      : Math.min(
+          devicePixelRatio || 1,
+          graphicsMode === 'auto' && matchMedia('(pointer:coarse)').matches
+            ? 1.5
+            : 2,
+        );
   const app = new Application();
   await app.init({
     resizeTo: window,
     background: 0x253b2d,
     antialias: false,
-    resolution: Math.min(devicePixelRatio || 1, 2),
+    resolution: resolution(),
     autoDensity: true,
     preference: 'webgl',
   });
+  app.ticker.maxFPS = graphicsMode === 'power' ? 30 : 60;
   host.appendChild(app.canvas);
   const atlas = await TextureAtlas.load();
   document.getElementById('boot')?.remove();
   const camera = new Camera();
-  camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+  camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
   camera.w = app.screen.width;
   camera.h = app.screen.height;
   const view = new WorldView(atlas),
@@ -88,9 +110,10 @@ async function boot(): Promise<void> {
     lastSavedTime = 0,
     lastSavedWall = 0,
     lastSaveError = '',
-    lastSavedAt = '';
+    lastSavedAt = '',
+    combatUntilWall = 0;
   function processCommands(): void {
-    if (commands.length) dirty = true;
+    if (commands.some((c) => c.type !== 'select')) dirty = true;
     for (const command of commands.splice(0))
       applyInventoryCommand(ctx, command);
     ensureEquipmentInstances(ctx);
@@ -99,8 +122,7 @@ async function boot(): Promise<void> {
     if (!uiReady || activeSlot === null || !ui.running || ctx.gameOver) return;
     processCommands();
     ctx.world.flush();
-    const record = captureSave(scene);
-    saves.write(activeSlot, record);
+    const record = saves.writeScene(activeSlot, scene);
     lastSavedAt = record.savedAt;
     lastSavedTime = ctx.world.time;
     lastSavedWall = performance.now();
@@ -181,6 +203,29 @@ async function boot(): Promise<void> {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
+  function explore(command: ExplorationCommand): void {
+    if (
+      !ui.running ||
+      ctx.gameOver ||
+      ui.menuOpen ||
+      ui.inventoryOpen ||
+      ctx.s.journal.get(ctx.player)?.talking
+    )
+      return;
+    const result = applyExplorationCommand(ctx, command);
+    dirty = true;
+    input.reset();
+    pendingEdges = 0;
+    loop.reset();
+    if (result.openMap) ui.setWorldMap(true);
+    if (result.teleported) {
+      ui.worldMap.close();
+      camera.snap(ctx.world.pos(ctx.player));
+      view.sync(scene, 0);
+      view.applyCamera(camera);
+      checkpoint();
+    }
+  }
   view.setScene(scene);
   camera.boundsW = scene.level.pixelW;
   camera.boundsH = scene.level.pixelH;
@@ -198,6 +243,42 @@ async function boot(): Promise<void> {
       pendingEdges = 0;
       loop.reset();
     },
+    interact: () => {
+      if (ui.paused || ctx.gameOver) return;
+      if (nearbyNpc(ctx)) applyQuestCommand(ctx, { type: 'talk' });
+      else explore({ type: 'interact' });
+      dirty = true;
+      input.reset();
+      pendingEdges = 0;
+      loop.reset();
+    },
+    explore,
+    graphics: () => {
+      graphicsMode =
+        graphicsMode === 'auto'
+          ? 'power'
+          : graphicsMode === 'power'
+            ? 'fine'
+            : 'auto';
+      app.ticker.maxFPS = graphicsMode === 'power' ? 30 : 60;
+      app.renderer.resize(innerWidth, innerHeight, resolution());
+      try {
+        localStorage.setItem('ashen-vale.graphics', graphicsMode);
+      } catch {
+        /* 不阻止设置 */
+      }
+      return graphicsMode === 'auto'
+        ? '画质：自动'
+        : graphicsMode === 'power'
+          ? '画质：省电 30 帧'
+          : '画质：精细';
+    },
+    graphicsLabel: () =>
+      graphicsMode === 'auto'
+        ? '画质：自动'
+        : graphicsMode === 'power'
+          ? '画质：省电 30 帧'
+          : '画质：精细',
     restart,
     checkpoint,
     saves: {
@@ -264,9 +345,10 @@ async function boot(): Promise<void> {
     }
   });
   window.addEventListener('resize', () => {
+    app.renderer.resize(innerWidth, innerHeight, resolution());
     camera.w = app.screen.width;
     camera.h = app.screen.height;
-    camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+    camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
   });
   app.ticker.add((ticker) => {
     const realDT = Math.min(ticker.deltaMS / 1000, 0.1);
@@ -321,7 +403,7 @@ async function boot(): Promise<void> {
         ensureEquipmentInstances(ctx);
       });
       const playerAt = ctx.world.pos(ctx.player);
-      camera.zoom = innerWidth < 600 ? 1.75 : CFG.camera.zoom;
+      camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
       camera.follow(playerAt, realDT);
       camera.update(realDT);
       present.update(realDT);
@@ -334,6 +416,20 @@ async function boot(): Promise<void> {
     }
     // 队列只 drain 一次，两个只读表现消费者共享同一批事件。
     const events = ctx.world.drain();
+    if (
+      events.some((e) =>
+        [
+          'swing',
+          'cast',
+          'mage',
+          'staffArt',
+          'bladeArt',
+          'hurt',
+          'playerHurt',
+        ].includes(e.kind),
+      )
+    )
+      combatUntilWall = performance.now() + 1500;
     present.consume(events);
     ui.consume(events);
     camera.w = app.screen.width;
@@ -359,7 +455,10 @@ async function boot(): Promise<void> {
     ui.update(ctx, realDT, fps);
     if (
       events.some(
-        (e) => e.kind === 'kill' || e.kind === 'pickup' || e.kind === 'notice',
+        (e) =>
+          e.kind === 'kill' ||
+          e.kind === 'pickup' ||
+          (e.kind === 'notice' && e.text?.startsWith('发现 ')),
       )
     )
       dirty = true;
@@ -367,7 +466,8 @@ async function boot(): Promise<void> {
       activeSlot !== null &&
       !ctx.gameOver &&
       performance.now() - lastSavedWall > 1000 &&
-      (dirty || ctx.world.time - lastSavedTime >= 20)
+      ((dirty && (ui.paused || performance.now() > combatUntilWall)) ||
+        ctx.world.time - lastSavedTime >= 20)
     )
       checkpoint();
   });
@@ -398,6 +498,7 @@ async function boot(): Promise<void> {
         applyInventoryCommand(ctx, cmd);
       },
       inventory: setInventory,
+      explore,
       quest: (command: QuestCommand) => applyQuestCommand(ctx, command),
       cast: (special = false) => castSelected(ctx, special),
       mage: (ability: MageSkillId) => castMage(ctx, ability),

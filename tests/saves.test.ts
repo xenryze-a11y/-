@@ -47,7 +47,7 @@ function sandbox(): Ctx {
   for (const id of scene.world.alive)
     if (id !== scene.player) scene.world.destroy(id);
   scene.world.flush();
-  scene.level = new Level(96, 72);
+  scene.level = new Level(256, 192);
   scene.level.tiles.fill(Tile.GRASS);
   scene.level.southWalls.fill(0);
   scene.world.setPos(scene.player, { x: 600, y: 600 });

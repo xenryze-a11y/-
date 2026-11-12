@@ -4,7 +4,14 @@ import { Level, TILE, Tile } from '../engine/level';
 import { makeRng, type Vec2 } from '../engine/math';
 import { createStores, TAG, type MobKind, type Stores } from './components';
 import { createInventory } from './inventory';
-import { createGroveLevel, groveClearance } from './grove';
+import { groveClearance } from './grove';
+import {
+  createWorldLevel,
+  siteLocations,
+  type SiteLocation,
+} from './world-layout';
+import { roadClearance } from './world-data';
+import { initializeExploration } from './exploration-world';
 import { SANCTUARY, NPCS } from './sanctuary-data';
 import { GROVE } from './mage-data';
 import { spawnDrop } from './systems/loot';
@@ -31,11 +38,22 @@ function solidAt(level: Level, x: number, y: number): boolean {
 }
 
 /** 随机找一个空地，避开实体和出生点。 */
-function findSpot(level: Level, rng: () => number, minFromSpawn = 0): Vec2 {
+function findSpot(
+  level: Level,
+  rng: () => number,
+  minFromSpawn = 0,
+  sites: SiteLocation[] = [],
+): Vec2 {
   for (let i = 0; i < 400; i++) {
     const x = (2 + rng() * (level.w - 4)) * TILE;
     const y = (2 + rng() * (level.h - 4)) * TILE;
-    if (level.blocked(x, y, 12) || groveClearance(x, y)) continue;
+    if (
+      level.blocked(x, y, 12) ||
+      groveClearance(x, y) ||
+      roadClearance(x, y) ||
+      sites.some((s) => Math.hypot(s.position.x - x, s.position.y - y) < 110)
+    )
+      continue;
     if (
       minFromSpawn > 0 &&
       Math.hypot(x - level.spawn.x, y - level.spawn.y) < minFromSpawn
@@ -53,7 +71,8 @@ export function buildScene(
 ): Scene {
   const world = new World((seed ^ 0x5bf03635) >>> 0);
   const s = createStores(world);
-  const level = createGroveLevel(seed);
+  const level = createWorldLevel(seed);
+  const sites = siteLocations(level, seed);
   const rng = makeRng((seed ^ 0x9e3779b9) >>> 0);
 
   const player = world.createAt(
@@ -196,7 +215,7 @@ export function buildScene(
   ];
   for (const def of props) {
     for (let i = 0; i < def.count; i++) {
-      const p = findSpot(level, rng, 120);
+      const p = findSpot(level, rng, 120, sites);
       if (def.blocks) level.addBlocker(p.x, p.y, def.r);
       const e = world.createAt(
         [TAG.PROP, ...(def.blocks ? [TAG.DAMAGEABLE] : [])],
@@ -306,7 +325,7 @@ export function buildScene(
 
   // 药剂：靠近自动拾取，演示「标签 + 事件」怎么扩玩法。
   for (let i = 0; i < CFG.spawn.pickups; i++) {
-    const p = findSpot(level, rng, 90);
+    const p = findSpot(level, rng, 90, sites);
     const kind = rng() < 0.5 ? 'mana' : 'health';
     const e = world.createAt([TAG.PICKUP], p.x, p.y);
     s.pickup.set(e, { kind, count: 1, bob: rng() * Math.PI * 2 });
@@ -358,11 +377,16 @@ export function buildScene(
     const d = 190 + rng() * 90;
     const x = level.spawn.x + Math.cos(a) * d;
     const y = level.spawn.y + Math.sin(a) * d;
-    const p = solidAt(level, x, y) ? findSpot(level, rng, 150) : { x, y };
+    const p =
+      solidAt(level, x, y) ||
+      level.blocked(x, y, 12) ||
+      sites.some((s) => Math.hypot(s.position.x - x, s.position.y - y) < 100)
+        ? findSpot(level, rng, 150, sites)
+        : { x, y };
     addMob(kinds[i % kinds.length], p.x, p.y);
   }
   for (let i = 5; i < CFG.spawn.mobs; i++) {
-    const p = findSpot(level, rng, 170);
+    const p = findSpot(level, rng, 170, sites);
     addMob(kinds[Math.floor(rng() * kinds.length)], p.x, p.y);
   }
 
@@ -389,6 +413,7 @@ export function buildScene(
     for (const school of Object.values(s.blade.get(player)!.schools))
       school.unlocked = false;
   }
+  initializeExploration(scene);
   syncEquipment(scene);
   ensureEquipmentInstances(scene);
   return scene;

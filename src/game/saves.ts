@@ -3,10 +3,13 @@ import { World, type WorldSnapshot } from '../engine/ecs';
 import { Level, type LevelSnapshot } from '../engine/level';
 import { createStores, C, TAG } from './components';
 import { ITEMS } from './items';
+import { createProgress } from './adventure';
+import { initializeExploration } from './exploration-world';
+import { SITES, WORLD } from './world-data';
 import { ensureEquipmentInstances, type AdventureProgress } from './adventure';
 import type { Scene } from './spawn';
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 3;
 export const SAVE_LIMIT = 2_000_000;
 export const SAVE_PREFIX = 'ashen-vale.save.v1.';
 export interface SaveData {
@@ -133,6 +136,7 @@ const schema: Record<string, Check> = {
     ),
   }),
   [C.MOB]: shape({
+    site: optional(one(...SITES.map((s) => s.id))),
     ...nums('speed aggro atkRange atkCd dmg think attackAnim hurtFlash'),
     ...Object.fromEntries(
       'slow frozen burn burnTick windup charge'
@@ -151,7 +155,12 @@ const schema: Record<string, Check> = {
     hit: optional(ids),
     barrage: optional(bool),
   }),
-  [C.PROP]: shape({ sprite: key, ...nums('w h'), blocks: bool }),
+  [C.PROP]: shape({
+    landmark: optional(one(...SITES.map((s) => s.id))),
+    sprite: key,
+    ...nums('w h'),
+    blocks: bool,
+  }),
   [C.PICKUP]: shape({
     kind: itemId,
     ...nums('count bob'),
@@ -254,7 +263,10 @@ const schema: Record<string, Check> = {
 function fail(message: string): never {
   throw new Error(message);
 }
-function validate(data: unknown): asserts data is SaveData {
+function validate(
+  data: unknown,
+  version = SAVE_VERSION,
+): asserts data is SaveData {
   if (
     !shape({ world: object, level: object, player: uint, progress: object })(
       data,
@@ -278,15 +290,59 @@ function validate(data: unknown): asserts data is SaveData {
       openedChests: array(key),
       purified: array(key),
       bosses: array(key),
+      ...(version === 1
+        ? {}
+        : {
+            worldVersion: one(version === 2 ? 2 : 3),
+            discovered: array(one(...SITES.map((s) => s.id)), SITES.length),
+            waypoints: array(
+              one(
+                ...SITES.filter((s) => s.kind === 'waypoint').map((s) => s.id),
+              ),
+              6,
+            ),
+            startedSites: array(
+              one(...SITES.filter((s) => s.guards > 0).map((s) => s.id)),
+              SITES.length,
+            ),
+            trackedSite: one('', ...SITES.map((s) => s.id)),
+            lastRegion: one('', 'vale', 'forest', 'sanctum'),
+            campReadyAt: number,
+            travelReadyAt: number,
+          }),
     })(d.progress)
   )
     fail('角色进度数据无效');
   if (
     !shape({
-      w: one(96),
-      h: one(72),
-      tiles: array(one(0, 1, 2, 3, 4, 5, 6), 6912, 6912),
-      southWalls: array(one(0, 1), 6912, 6912),
+      w: one(version === 1 ? 96 : version === 2 ? 128 : WORLD.width),
+      h: one(version === 1 ? 72 : version === 2 ? 96 : WORLD.height),
+      tiles: array(
+        version < 3 ? one(0, 1, 2, 3, 4, 5, 6) : one(0, 1, 2, 3, 4, 5, 6, 7, 8),
+        version === 1
+          ? 6912
+          : version === 2
+            ? 12288
+            : WORLD.width * WORLD.height,
+        version === 1
+          ? 6912
+          : version === 2
+            ? 12288
+            : WORLD.width * WORLD.height,
+      ),
+      southWalls: array(
+        one(0, 1),
+        version === 1
+          ? 6912
+          : version === 2
+            ? 12288
+            : WORLD.width * WORLD.height,
+        version === 1
+          ? 6912
+          : version === 2
+            ? 12288
+            : WORLD.width * WORLD.height,
+      ),
       spawn: vec,
       blockers: array(shape(nums('x y r')), 5000),
       revision: uint,
@@ -507,12 +563,16 @@ export function parseSave(raw: string): SaveRecord {
   }
   if (!object(record) || record.format !== 'ashen-vale')
     fail('这不是灰烬谷存档');
-  if (record.version !== SAVE_VERSION)
+  if (
+    record.version !== 1 &&
+    record.version !== 2 &&
+    record.version !== SAVE_VERSION
+  )
     fail('存档版本不兼容，请使用对应版本的游戏');
   if (
     !shape({
       format: one('ashen-vale'),
-      version: one(SAVE_VERSION),
+      version: one(1, 2, SAVE_VERSION),
       savedAt: text,
       checksum: text,
       data: object,
@@ -522,7 +582,7 @@ export function parseSave(raw: string): SaveRecord {
     fail('存档信息损坏');
   if (record.checksum !== checksum(JSON.stringify(record.data)))
     fail('存档校验失败，文件可能已损坏');
-  validate(record.data);
+  validate(record.data, record.version as number);
   return record as unknown as SaveRecord;
 }
 export function restoreSave(record: SaveRecord): Scene {
@@ -531,30 +591,64 @@ export function restoreSave(record: SaveRecord): Scene {
   const world = new World();
   const s = createStores(world);
   world.restore(data.world);
-  return {
+  const scene = {
     world,
     s,
     level: Level.restore(data.level),
     player: data.player,
-    progress: structuredClone(data.progress),
+    progress:
+      record.version === 1
+        ? {
+            ...createProgress(
+              data.progress.seed,
+              'adventure',
+              data.progress.name,
+            ),
+            ...structuredClone(data.progress),
+            worldVersion: 0,
+          }
+        : structuredClone(data.progress),
   };
+  initializeExploration(scene);
+  return scene;
 }
 
 /** 一个槽位一次原子写入，内含当前版和上次有效版；存储失败不破坏旧记录。 */
 export class SaveRepository {
+  private readonly cache = new Map<
+    number,
+    { raw: string; record: string; recovered?: boolean }
+  >();
   constructor(private readonly storage: SaveStorage) {}
   read(slot: number): SlotResult {
     try {
       const raw = this.storage.getItem(this.key(slot));
       if (!raw) return {};
+      const cached = this.cache.get(slot);
+      if (cached?.raw === raw)
+        return {
+          record: JSON.parse(cached.record) as SaveRecord,
+          recovered: cached.recovered,
+        };
+      const remember = (
+        record: SaveRecord,
+        recovered?: boolean,
+      ): SlotResult => {
+        this.cache.set(slot, {
+          raw,
+          record: JSON.stringify(record),
+          recovered,
+        });
+        return { record, recovered };
+      };
       const value: unknown = JSON.parse(raw);
       if (!object(value)) fail('存档槽损坏');
       try {
-        return { record: parseSave(String(value.current)) };
+        return remember(parseSave(String(value.current)));
       } catch (error) {
         if (typeof value.backup === 'string') {
           try {
-            return { record: parseSave(value.backup), recovered: true };
+            return remember(parseSave(value.backup), true);
           } catch {
             /* 显示主档错误 */
           }
@@ -566,17 +660,27 @@ export class SaveRepository {
     }
   }
   write(slot: number, record: SaveRecord): void {
-    const current = JSON.stringify(parseSave(JSON.stringify(record)));
+    const checked = parseSave(JSON.stringify(record));
+    this.commit(slot, checked);
+  }
+  /** 自有快照已由 captureSave 校验，避免同一固定步连续重建三次世界。 */
+  writeScene(slot: number, scene: Scene): SaveRecord {
+    const record = captureSave(scene);
+    this.commit(slot, record);
+    return record;
+  }
+  private commit(slot: number, record: SaveRecord): void {
+    const current = JSON.stringify(record);
     const previous = this.read(slot).record;
     if (previous?.checksum === record.checksum) return;
-    this.storage.setItem(
-      this.key(slot),
-      JSON.stringify({
-        current,
-        backup: previous ? JSON.stringify(previous) : null,
-      }),
-    );
+    const raw = JSON.stringify({
+      current,
+      backup: previous ? JSON.stringify(previous) : null,
+    });
+    this.storage.setItem(this.key(slot), raw);
+    this.cache.set(slot, { raw, record: current });
   }
+
   private key(slot: number): string {
     if (!Number.isInteger(slot) || slot < 0 || slot > 2) fail('只有三个存档位');
     return SAVE_PREFIX + slot;

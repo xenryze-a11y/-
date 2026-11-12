@@ -1,4 +1,4 @@
-# 冒险存档 v1
+# 冒险存档 v3（兼容 v1 / v2）
 
 入口：`game/saves.ts`（格式/校验/本地仓库）、`game/adventure.ts`（世界进度/逐件身份）、`game/save-menu.ts`（只读面板）、`main.ts`（事务与生命周期）。UI 不写 ECS，模拟不访问浏览器存储。
 
@@ -30,3 +30,13 @@
 2026-11-12：typecheck、86 项模拟回归、普通构建和单文件导出均通过。生产构建浏览器实测通过刷新续玩、移动与光标物品恢复、炎躯生命和冷却续接、JSON 下载后导入另一槽、三槽独立、覆盖取消、非法导入拒绝、试用隔离、390×844/844×390 布局。离线包在禁网和不可用存储环境下仍能导出当前角色；测试过程无脚本异常。
 
 界面实机：[桌面存档](adventure-saves-desktop.png)、[手机存档](adventure-saves-mobile.png)。
+
+
+## v2 三域迁移
+
+本地键继续使用原 `ashen-vale.save.v1.*`，格式版本单独记录。parseSave 同时校验 v1 和 v2；恢复 v1 时先保留原实体/组件/RNG，再扩展 Level 并初始化探索内容，下一次保存输出 v2。v2 地图为 128×96，新增进度字段 worldVersion、discovered、waypoints、startedSites、trackedSite、lastRegion、campReadyAt、travelReadyAt；Prop.landmark 与 Mob.site 只允许已知内容 ID。迷雾沿用 explored，遗箱/眺望点沿用 openedChests，圣龛沿用 purified。具体规则及测试夹具说明见 [WORLD_EXPLORATION.md](WORLD_EXPLORATION.md)。
+
+
+## v3 四倍扩图与保存优化
+
+v3为256×192，CLIFF/STAIRS真实瓦片，worldVersion=3，支持30地点/6界石；v1/v2完整恢复后再扩图，原坐标、实体、奖励和装备保留。原本地键不变。writeScene仅用于本游戏同步捕获并已校验的快照，外部JSON仍走parseSave/restoreSave/write。验证缓存以原始存储字符串为键，读取返回独立JSON副本；外部改记录不会污染缓存。失败写入不能更新缓存，也不能挤掉旧备份。详见 [景观与性能](LANDSCAPES_AND_PERFORMANCE.md)。

@@ -62,3 +62,8 @@ prepare-flame-sanctuary.cjs使用浏览器Canvas固定格裁切，火焰最近�
 新增source/sanctum-props-rebuilt.png（新树 / 祭坛）、sanctum-terrain-generated.png（石板 / 苔草 / 路 / 根床 / 花石）、cathedral-exterior-generated.png（完整教堂）、cathedral-interior-generated.png（内部地板 / 四家具 / 太阳镶嵌），全部原创生成，无下载外部游戏素材。prepare-sanctum-rebuild.cjs保留原稿，以Canvas固定分区裁切 / 白色边缘连通背景剔除 / 半尺寸 / 46色 / alpha180硬透明 / 2倍最近邻输出sanctum-rebuilt.png（1024×1120）。*-frames.json记录15帧布局；写出前做全切片矩形不相交检查，避免柱子覆盖祭坛切片。旧圣域图仅保留历史，NPC四帧仍使用前一版本生成图。
 
 运行最后覆盖同尺寸教堂 / 树 / 家具帧，四地面32×32、根床256×128、低花石96×48、镶嵌128×128进入同一图集。地面在场景创建时烘焙，没有新增运行时下载。树 / 祭坛不再使用夸张通用阴影，旧树脚金色椭圆环也删除；橄榄叶色偏向地图苔绿，象牙树干和金饰保留。炎躯Back / Front由现有三帧生成护体图按行86分离，像素不重绘，附着角色并保留头脸可见。
+
+
+## 四倍世界景观（2026-11-12）
+
+source/landscape-props-generated.png 与 source/landscape-ground-generated.png 是本轮新生成原稿，保留未改。scripts/prepare-landscape-art.cjs 用浏览器Canvas处理半尺寸采样、48色色板、硬透明、地表接缝与2倍最近邻，输出landscape-pixel.png及28帧元数据。仅该小图进入运行包；地表按128材质块切32子片，在512地形块中烘焙；道具统一脚底锚点，激活帧保留造型。原稿不运行时下载，规则与验证见 docs/LANDSCAPES_AND_PERFORMANCE.md。

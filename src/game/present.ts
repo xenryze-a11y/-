@@ -57,6 +57,11 @@ export class Presentation {
 
   consume(events: GameEvent[]): void {
     for (const ev of events) {
+      if (
+        Math.abs(ev.x - this.camera.pos.x) > 1100 ||
+        Math.abs(ev.y - this.camera.pos.y) > 1100
+      )
+        continue;
       switch (ev.kind) {
         case 'bladeArt':
           this.blades.consume(ev);
@@ -257,6 +262,7 @@ export class Presentation {
   }
 
   private float(text: string, x: number, y: number, color: number): void {
+    if (this.effects.length >= 160) return;
     if (!text) return;
     const t = new Text({
       text,

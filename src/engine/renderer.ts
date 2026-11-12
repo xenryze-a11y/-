@@ -1,4 +1,8 @@
 import { sanctumGroundFrame, SANCTUM_GARDENS } from '../game/sanctum-ground';
+import { landscapeGroundFrame } from '../game/landscape-art';
+import { drawCartoonGroundEdges } from '../game/cartoon-scene-art';
+import { SITES } from '../game/world-data';
+import { completedSite } from '../game/systems/exploration';
 import { GROVE } from '../game/mage-data';
 /**
  * ECS → Pixi 显示对象。对应 goengine 的 game/scene（只读 World，从不写回）。
@@ -9,7 +13,7 @@ import { GROVE } from '../game/mage-data';
  * 表现状态（走路相位、混合、上一帧位置、渲染时钟）全部存在 AvatarView / WorldView 里，
  * 绝不写回 ECS —— 这条隔离是以后接服务端权威 / 回放的前提。
  */
-import { Container, Sprite, Texture, Text } from 'pixi.js';
+import { Container, Sprite, Texture, Text, Rectangle } from 'pixi.js';
 import { riftFrame, BLADE_MAGIC } from '../game/weapon-data';
 import { BlockAvatar } from '../game/block-avatar';
 import { SanctuaryView } from '../game/sanctuary-view';
@@ -90,7 +94,25 @@ export class WorldView {
   private readonly lights = new Map<number, Sprite>();
 
   private readonly views = new Map<number, EntityView>();
-  private groundSprite?: Sprite;
+  private readonly groundChunks = new Map<
+    string,
+    { sprite: Sprite; used: number; slot: number }
+  >();
+  private groundTick = 0;
+  private groundAtlas?: Texture;
+  private groundCanvas?: HTMLCanvasElement;
+  private groundAtlasSize = 2048;
+  private camera?: Camera;
+  private viewBounds = { left: 0, top: 0, right: 0, bottom: 0 };
+  get performanceStats() {
+    return {
+      groundChunks: this.groundChunks.size,
+      groundTextureBytes: this.groundAtlas ? this.groundAtlasSize ** 2 * 4 : 0,
+      groundTextureSources: this.groundAtlas ? 1 : 0,
+      entityViews: this.views.size,
+      visibleWalls: this.walls.filter((w) => w.sprite.visible).length,
+    };
+  }
   /** 表现层自己的时钟：特效帧率不该依赖模拟步数。 */
   private renderTime = 0;
 
@@ -116,40 +138,144 @@ export class WorldView {
       v.root.destroy({ children: true }); // 贴图是共享图集，绝不能 destroy texture
     }
     this.views.clear();
-    this.rebuildGround(scene);
+    this.clearGround();
     this.rebuildWalls(scene);
     this.sanctuary.reset();
   }
 
-  private rebuildGround(scene: Scene): void {
-    if (this.groundSprite) {
-      this.groundLayer.removeChild(this.groundSprite);
-      this.groundSprite.destroy({ texture: true, textureSource: true });
+  private clearGround(): void {
+    for (const c of this.groundChunks.values())
+      c.sprite.destroy({ texture: true });
+    this.groundChunks.clear();
+    this.groundAtlas?.destroy(true);
+    this.groundAtlas = undefined;
+    this.groundCanvas = undefined;
+  }
+  private updateBounds(scene: Scene): void {
+    const p = this.camera?.pos || scene.world.pos(scene.player),
+      halfW = (this.camera?.w || innerWidth) / (2 * (this.camera?.zoom || 2)),
+      halfH = (this.camera?.h || innerHeight) / (2 * (this.camera?.zoom || 2));
+    this.viewBounds = {
+      left: p.x - halfW - 192,
+      right: p.x + halfW + 192,
+      top: p.y - halfH - 192,
+      bottom: p.y + halfH + 400,
+    };
+  }
+  private syncGround(scene: Scene): void {
+    this.groundTick++;
+    const p = this.camera?.pos || scene.world.pos(scene.player),
+      halfW =
+        (this.camera?.w || innerWidth) / (2 * (this.camera?.zoom || 2)) + 64,
+      halfH =
+        (this.camera?.h || innerHeight) / (2 * (this.camera?.zoom || 2)) + 64;
+    const needed: { key: string; x: number; y: number }[] = [];
+    for (
+      let y = Math.max(0, Math.floor((p.y - halfH) / 512));
+      y <=
+      Math.min(
+        Math.ceil(scene.level.pixelH / 512) - 1,
+        Math.floor((p.y + halfH) / 512),
+      );
+      y++
+    )
+      for (
+        let x = Math.max(0, Math.floor((p.x - halfW) / 512));
+        x <=
+        Math.min(
+          Math.ceil(scene.level.pixelW / 512) - 1,
+          Math.floor((p.x + halfW) / 512),
+        );
+        x++
+      )
+        needed.push({ key: `${x}:${y}`, x, y });
+    const size =
+      (Math.ceil((halfW * 2) / 512) + 1) * (Math.ceil((halfH * 2) / 512) + 1) >
+      16
+        ? 4096
+        : 2048;
+    if (this.groundAtlas && this.groundAtlasSize !== size) this.clearGround();
+    if (!this.groundAtlas) {
+      this.groundAtlasSize = size;
+      this.groundCanvas = document.createElement('canvas');
+      this.groundCanvas.width = size;
+      this.groundCanvas.height = size;
+      this.groundAtlas = Texture.from(this.groundCanvas, true);
+      this.groundAtlas.source.style.scaleMode = 'nearest';
+      this.groundAtlas.source.autoGenerateMipmaps = false;
     }
+    const keys = new Set(needed.map((n) => n.key)),
+      capacity = (this.groundAtlasSize / 512) ** 2;
+    for (const [key, c] of this.groundChunks) c.sprite.visible = keys.has(key);
+    for (const n of needed) {
+      let c = this.groundChunks.get(n.key);
+      if (!c) {
+        let slot: number;
+        if (this.groundChunks.size >= capacity) {
+          const oldest = [...this.groundChunks]
+            .filter(([key]) => !keys.has(key))
+            .sort((a, b) => a[1].used - b[1].used)[0];
+          if (!oldest) continue;
+          slot = oldest[1].slot;
+          oldest[1].sprite.destroy({ texture: true });
+          this.groundChunks.delete(oldest[0]);
+        } else {
+          const used = new Set(
+            [...this.groundChunks.values()].map((c) => c.slot),
+          );
+          slot = 0;
+          while (used.has(slot)) slot++;
+        }
+        c = {
+          sprite: this.bakeGroundChunk(scene, n.x, n.y, slot),
+          used: this.groundTick,
+          slot,
+        };
+        this.groundChunks.set(n.key, c);
+        this.groundLayer.addChildAt(c.sprite, 0);
+      }
+      c.used = this.groundTick;
+      c.sprite.visible = true;
+    }
+  }
+  private bakeGroundChunk(
+    scene: Scene,
+    cx: number,
+    cy: number,
+    slot: number,
+  ): Sprite {
     const level = scene.level,
       c = document.createElement('canvas');
-    c.width = level.pixelW;
-    c.height = level.pixelH;
+    c.width = Math.min(512, level.pixelW - cx * 512);
+    c.height = Math.min(512, level.pixelH - cy * 512);
     const g = c.getContext('2d')!;
     g.imageSmoothingEnabled = false;
-    for (let y = 0; y < level.h; y++)
-      for (let x = 0; x < level.w; x++) {
+    g.translate(-cx * 512, -cy * 512);
+    for (let y = cy * 16; y < Math.min(level.h, cy * 16 + 16); y++)
+      for (let x = cx * 16; x < Math.min(level.w, cx * 16 + 16); x++) {
         const tile = level.at(x, y),
           sanctum = sanctumGroundFrame(x, y, tile),
-          name = sanctum || TILE_SPRITE[tile === Tile.WALL ? Tile.STONE : tile],
+          generated = !sanctum ? landscapeGroundFrame(level, x, y) : undefined,
+          name =
+            sanctum ||
+            generated ||
+            TILE_SPRITE[tile === Tile.WALL ? Tile.STONE : tile],
           f = this.atlas.frames[name];
         g.drawImage(
           this.atlas.canvas,
-          f.x,
-          f.y,
-          f.w,
-          f.h,
+          f.x + (generated ? (x % 4) * 32 : 0),
+          f.y + (generated ? (y % 4) * 32 : 0),
+          generated ? 32 : f.w,
+          generated ? 32 : f.h,
           x * 32,
           y * 32,
           32,
           32,
         );
-        if (sanctum) continue;
+        if (sanctum || generated) {
+          if (generated) drawCartoonGroundEdges(g, level, x, y);
+          continue;
+        }
         // Tile-local variations avoid a repeated carpet without introducing texture seams.
         const rng = makeRng(x * 73471 + y * 3571 + CFG.seed);
         if (tile === Tile.GRASS) {
@@ -227,9 +353,20 @@ export class WorldView {
     decal('groundSacredMosaic', GROVE.altar.x, GROVE.altar.y + 115);
     for (const at of SANCTUM_GARDENS)
       decal('groundSacredGarden', at.x, at.y - 12);
-    this.groundSprite = new Sprite(Texture.from(c, true));
-    this.groundSprite.texture.source.style.scaleMode = 'nearest';
-    this.groundLayer.addChildAt(this.groundSprite, 0);
+    const columns = this.groundAtlasSize / 512,
+      x = (slot % columns) * 512,
+      y = Math.floor(slot / columns) * 512,
+      gc = this.groundCanvas!.getContext('2d')!;
+    gc.clearRect(x, y, 512, 512);
+    gc.drawImage(c, x, y);
+    this.groundAtlas!.source.update();
+    const texture = new Texture({
+        source: this.groundAtlas!.source,
+        frame: new Rectangle(x, y, c.width, c.height),
+      }),
+      sprite = new Sprite(texture);
+    sprite.position.set(cx * 512, cy * 512);
+    return sprite;
   }
   /** 墙脚和人物脚底共用同一排序，不能把南墙整张烘焙在最高层。 */
   private rebuildWalls(scene: Scene): void {
@@ -238,9 +375,16 @@ export class WorldView {
     const level = scene.level;
     for (let y = 0; y < level.h; y++)
       for (let x = 0; x < level.w; x++)
-        if (level.at(x, y) === Tile.WALL) {
+        if (level.at(x, y) === Tile.WALL || level.at(x, y) === Tile.CLIFF) {
           const sprite = new Sprite(
-            this.atlas.get('tileWallRaised' + ((x + y * 7) % 4)),
+            this.atlas.get(
+              level.at(x, y) === Tile.CLIFF
+                ? 'tileCliffRaised'
+                : (onCathedral({ x: (x + 0.5) * TILE, y: (y + 0.5) * TILE })
+                    ? 'tileWallRaised'
+                    : 'tileCartoonWallRaised') +
+                    ((x + y * 7) % 4),
+            ),
           );
           sprite.position.set(x * TILE, y * TILE - TILE);
           sprite.zIndex = (y + 1) * TILE + 0.1;
@@ -256,6 +400,7 @@ export class WorldView {
   }
 
   applyCamera(camera: Camera): void {
+    this.camera = camera;
     const o = camera.offset();
     this.root.position.set(o.x, o.y);
     this.root.scale.set(camera.zoom);
@@ -264,12 +409,23 @@ export class WorldView {
   /** 每渲染帧一次：对齐显示对象与 ECS。dt 用真实帧时间，走路相位才不会受固定步长影响。 */
   sync(scene: Scene, dt: number): void {
     this.renderTime += dt;
+    this.updateBounds(scene);
+    this.syncGround(scene);
     const { world, s } = scene;
     const seen = new Set<number>();
 
     s.look.forEach((e, look) => {
       const p = world.positions.get(e);
       if (!p || world.isPendingDeath(e)) return;
+      const bounds = this.viewBounds;
+      if (
+        e !== scene.player &&
+        (p.x < bounds.left ||
+          p.x > bounds.right ||
+          p.y < bounds.top ||
+          p.y > bounds.bottom)
+      )
+        return;
       seen.add(e);
       let v = this.views.get(e);
       if (!v) {
@@ -295,6 +451,36 @@ export class WorldView {
       if (v.block) v.block.sync(scene, e, dt);
       else if (v.parts) this.updateAvatar(v, e, look, scene, dt);
       else if (v.sprite) this.updateStatic(v.sprite, e, look, scene);
+      const landmark = s.prop.get(e)?.landmark;
+      if (landmark && v.sprite) {
+        const definition = SITES.find((d) => d.id === landmark)!;
+        const active =
+          definition.kind === 'waypoint'
+            ? scene.progress.waypoints.includes(landmark)
+            : completedSite(scene, definition);
+        v.sprite.texture = this.atlas.get(
+          look.staticSprite + (active ? 'Active' : ''),
+        );
+        if (!v.npcLabel) {
+          v.npcLabel = new Text({
+            text: definition.name,
+            style: {
+              fontFamily: 'system-ui',
+              fontSize: 9,
+              fill: 0xe6dfbc,
+              stroke: { color: 0x182c29, width: 3 },
+            },
+          });
+          v.npcLabel.anchor.set(0.5, 1);
+          v.npcLabel.y = 18;
+          v.root.addChild(v.npcLabel);
+        }
+        v.npcLabel.visible =
+          Math.hypot(
+            p.x - world.pos(scene.player).x,
+            p.y - world.pos(scene.player).y,
+          ) < 230;
+      }
       const npc = s.npc.get(e);
       if (npc && !v.npcLabel) {
         const def = NPCS[npc.kind];
@@ -322,6 +508,12 @@ export class WorldView {
     this.sanctuary.sync(scene, dt);
     const player = world.pos(scene.player);
     for (const wall of this.walls) {
+      wall.sprite.visible =
+        wall.x > this.viewBounds.left - 32 &&
+        wall.x < this.viewBounds.right + 32 &&
+        wall.y > this.viewBounds.top - 64 &&
+        wall.y < this.viewBounds.bottom;
+      if (!wall.sprite.visible) continue;
       const hides =
         player.y < wall.depth &&
         player.y > wall.y - 53 &&
@@ -339,7 +531,12 @@ export class WorldView {
     }
     for (const [id, v] of this.views)
       if (
-        ['propTree', 'propAncientTree'].includes(v.look.staticSprite || '') &&
+        [
+          'propTree',
+          'propBlightTree',
+          'propDeadTree',
+          'propAncientTree',
+        ].includes(v.look.staticSprite || '') &&
         v.sprite
       ) {
         const p = world.pos(id),
@@ -385,9 +582,12 @@ export class WorldView {
     const view: EntityView = { root, look, pose: newLimbPose() };
     if (look.staticSprite) {
       const sprite = new Sprite(this.atlas.get(look.staticSprite));
-      const tree = ['propTree', 'propAncientTree'].includes(
-        look.staticSprite || '',
-      );
+      const tree = [
+        'propTree',
+        'propBlightTree',
+        'propDeadTree',
+        'propAncientTree',
+      ].includes(look.staticSprite || '');
       sprite.anchor.set(
         0.5,
         tree
@@ -400,6 +600,18 @@ export class WorldView {
                 ? 0.88
                 : 0.5,
       );
+      if (
+        look.family === 'prop' &&
+        (look.staticSprite.startsWith('land') ||
+          [
+            'propRuinArch',
+            'propRuinPillar',
+            'propFungus',
+            'propRuinChapel',
+          ].includes(look.staticSprite))
+      )
+        sprite.anchor.y =
+          (sprite.texture.frame.height - 2) / sprite.texture.frame.height;
       sprite.zIndex = look.family === 'prop' ? LAYER.BODY : LAYER.FX;
       if (look.family === 'summon') {
         const shadow = new Sprite(this.atlas.get('partShadow'));
