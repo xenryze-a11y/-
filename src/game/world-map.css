@@ -154,3 +154,12 @@
   height: auto;
   aspect-ratio: 4 / 3;
 }
+
+.av-map-region {
+  text-align: left;
+  color: #d7dec5;
+  cursor: pointer;
+}
+.av-map-region:hover {
+  border-color: #d9cc93;
+}

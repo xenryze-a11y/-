@@ -31,7 +31,7 @@ import { BASKETBALL_VISUAL, summonFrameAt } from '../game/basketball-content';
 import { STAFF_FRAME } from '../game/generated-staves';
 import { makeRng } from './math';
 import { spriteName, facingView, fourDirection } from './facing';
-import { TILE, TILE_SPRITE, Tile } from './level';
+import { TILE_SPRITE, Tile } from './level';
 import {
   RIG,
   bodyBob,
@@ -91,6 +91,9 @@ export class WorldView {
     depth: number;
     alpha: number;
   }[] = [];
+  private wallLevel?: Scene['level'];
+  private wallRevision = -1;
+  private wallRange = '';
   private readonly lights = new Map<number, Sprite>();
 
   private readonly views = new Map<number, EntityView>();
@@ -99,6 +102,7 @@ export class WorldView {
     { sprite: Sprite; used: number; slot: number }
   >();
   private groundTick = 0;
+  private groundTerrainRevision = -1;
   private groundAtlas?: Texture;
   private groundCanvas?: HTMLCanvasElement;
   private groundAtlasSize = 2048;
@@ -110,6 +114,7 @@ export class WorldView {
       groundTextureBytes: this.groundAtlas ? this.groundAtlasSize ** 2 * 4 : 0,
       groundTextureSources: this.groundAtlas ? 1 : 0,
       entityViews: this.views.size,
+      wallViews: this.walls.length,
       visibleWalls: this.walls.filter((w) => w.sprite.visible).length,
     };
   }
@@ -150,6 +155,7 @@ export class WorldView {
     this.groundAtlas?.destroy(true);
     this.groundAtlas = undefined;
     this.groundCanvas = undefined;
+    this.groundTerrainRevision = -1;
   }
   private updateBounds(scene: Scene): void {
     const p = this.camera?.pos || scene.world.pos(scene.player),
@@ -163,6 +169,10 @@ export class WorldView {
     };
   }
   private syncGround(scene: Scene): void {
+    if (this.groundTerrainRevision !== scene.level.terrainRevision) {
+      this.clearGround();
+      this.groundTerrainRevision = scene.level.terrainRevision;
+    }
     this.groundTick++;
     const p = this.camera?.pos || scene.world.pos(scene.player),
       halfW =
@@ -254,8 +264,23 @@ export class WorldView {
     for (let y = cy * 16; y < Math.min(level.h, cy * 16 + 16); y++)
       for (let x = cx * 16; x < Math.min(level.w, cx * 16 + 16); x++) {
         const tile = level.at(x, y),
-          sanctum = sanctumGroundFrame(x, y, tile),
-          generated = !sanctum ? landscapeGroundFrame(level, x, y) : undefined,
+          sanctum =
+            scene.progress.zone === 'overworld'
+              ? sanctumGroundFrame(x, y, tile)
+              : null,
+          generated =
+            scene.progress.zone !== 'overworld'
+              ? tile === Tile.WALL
+                ? 'terrainDungeonVoid'
+                : 'terrainDungeon' +
+                  (scene.progress.zone === 'mine'
+                    ? 'Mine'
+                    : scene.progress.zone === 'roots'
+                      ? 'Roots'
+                      : 'Jail')
+              : !sanctum
+                ? landscapeGroundFrame(level, x, y)
+                : undefined,
           name =
             sanctum ||
             generated ||
@@ -349,10 +374,12 @@ export class WorldView {
         f.h,
       );
     };
-    decal('groundSacredRoots', GROVE.tree.x, GROVE.tree.y - 2);
-    decal('groundSacredMosaic', GROVE.altar.x, GROVE.altar.y + 115);
-    for (const at of SANCTUM_GARDENS)
-      decal('groundSacredGarden', at.x, at.y - 12);
+    if (scene.progress.zone === 'overworld') {
+      decal('groundSacredRoots', GROVE.tree.x, GROVE.tree.y - 2);
+      decal('groundSacredMosaic', GROVE.altar.x, GROVE.altar.y + 115);
+      for (const at of SANCTUM_GARDENS)
+        decal('groundSacredGarden', at.x, at.y - 12);
+    }
     const columns = this.groundAtlasSize / 512,
       x = (slot % columns) * 512,
       y = Math.floor(slot / columns) * 512,
@@ -372,31 +399,76 @@ export class WorldView {
   private rebuildWalls(scene: Scene): void {
     for (const wall of this.walls) wall.sprite.destroy();
     this.walls.length = 0;
-    const level = scene.level;
-    for (let y = 0; y < level.h; y++)
-      for (let x = 0; x < level.w; x++)
-        if (level.at(x, y) === Tile.WALL || level.at(x, y) === Tile.CLIFF) {
+    this.wallLevel = undefined;
+    this.wallRange = '';
+    this.wallRevision = -1;
+    this.updateBounds(scene);
+    this.syncWalls(scene);
+  }
+  private syncWalls(scene: Scene): void {
+    const level = scene.level,
+      b = this.viewBounds;
+    const left = Math.max(0, Math.floor(b.left / 32) - 1),
+      right = Math.min(level.w - 1, Math.ceil(b.right / 32) + 1),
+      top = Math.max(0, Math.floor(b.top / 32) - 2),
+      bottom = Math.min(level.h - 1, Math.ceil(b.bottom / 32));
+    const key = [left, right, top, bottom].join(':');
+    if (
+      this.wallLevel === level &&
+      this.wallRevision === level.revision &&
+      key === this.wallRange
+    )
+      return;
+    const previous = new Map(this.walls.map((w) => [`${w.x}:${w.y}`, w]));
+    this.walls.length = 0;
+    for (let y = top; y <= bottom; y++)
+      for (let x = left; x <= right; x++) {
+        const tile = level.at(x, y);
+        if (tile !== Tile.WALL && tile !== Tile.CLIFF) continue;
+        // 实心岩体只烘焙地表，边缘才需要抬高Sprite，避免整座山堆满墙。
+        if (
+          [
+            [-1, 0],
+            [1, 0],
+            [0, -1],
+            [0, 1],
+          ].every(([dx, dy]) =>
+            [Tile.WALL, Tile.CLIFF].includes(level.at(x + dx, y + dy) as 5 | 7),
+          )
+        )
+          continue;
+        const id = `${x * 32}:${y * 32}`;
+        let wall = previous.get(id);
+        if (wall) previous.delete(id);
+        else {
+          const oldChurch =
+            scene.progress.zone === 'overworld' &&
+            onCathedral({ x: (x + 0.5) * 32, y: (y + 0.5) * 32 });
           const sprite = new Sprite(
             this.atlas.get(
-              level.at(x, y) === Tile.CLIFF
+              tile === Tile.CLIFF
                 ? 'tileCliffRaised'
-                : (onCathedral({ x: (x + 0.5) * TILE, y: (y + 0.5) * TILE })
-                    ? 'tileWallRaised'
-                    : 'tileCartoonWallRaised') +
+                : (oldChurch ? 'tileWallRaised' : 'tileCartoonWallRaised') +
                     ((x + y * 7) % 4),
             ),
           );
-          sprite.position.set(x * TILE, y * TILE - TILE);
-          sprite.zIndex = (y + 1) * TILE + 0.1;
+          sprite.position.set(x * 32, y * 32 - 32);
+          sprite.zIndex = (y + 1) * 32 + 0.1;
           this.entityLayer.addChild(sprite);
-          this.walls.push({
+          wall = {
             sprite,
-            x: x * TILE,
-            y: y * TILE,
-            depth: (y + 1) * TILE,
+            x: x * 32,
+            y: y * 32,
+            depth: (y + 1) * 32,
             alpha: 1,
-          });
+          };
         }
+        this.walls.push(wall);
+      }
+    for (const wall of previous.values()) wall.sprite.destroy();
+    this.wallLevel = level;
+    this.wallRevision = level.revision;
+    this.wallRange = key;
   }
 
   applyCamera(camera: Camera): void {
@@ -410,6 +482,7 @@ export class WorldView {
   sync(scene: Scene, dt: number): void {
     this.renderTime += dt;
     this.updateBounds(scene);
+    this.syncWalls(scene);
     this.syncGround(scene);
     const { world, s } = scene;
     const seen = new Set<number>();
@@ -436,6 +509,7 @@ export class WorldView {
       // 南立面前的角色按脚底站在屋面前；不能为露出头部而把屋顶从外面变透明。
       const church = SANCTUARY.cathedral,
         front =
+          scene.progress.zone === 'overworld' &&
           p.y >= church.y + church.h &&
           p.x >= church.x - 40 &&
           p.x <= church.x + church.w + 40,
@@ -445,6 +519,7 @@ export class WorldView {
       // 伪深度：脚底越靠下（y 越大）越后画。
       v.root.zIndex = p.y;
       v.root.visible =
+        scene.progress.zone !== 'overworld' ||
         e === scene.player ||
         !inCathedral(p) ||
         inCathedral(world.pos(scene.player));
@@ -459,7 +534,10 @@ export class WorldView {
             ? scene.progress.waypoints.includes(landmark)
             : completedSite(scene, definition);
         v.sprite.texture = this.atlas.get(
-          look.staticSprite + (active ? 'Active' : ''),
+          look.staticSprite +
+            (active && this.atlas.has(look.staticSprite + 'Active')
+              ? 'Active'
+              : ''),
         );
         if (!v.npcLabel) {
           v.npcLabel = new Text({
@@ -520,7 +598,9 @@ export class WorldView {
         player.x > wall.x - 13 &&
         player.x < wall.x + 45;
       wall.alpha +=
-        ((onCathedral({ x: wall.x + 16, y: wall.y + 16 }) && inCathedral(player)
+        ((scene.progress.zone === 'overworld' &&
+        onCathedral({ x: wall.x + 16, y: wall.y + 16 }) &&
+        inCathedral(player)
           ? 0.35
           : hides
             ? 0.22
@@ -561,7 +641,10 @@ export class WorldView {
         this.lights.set(id, light);
       }
       const p = world.pos(id);
-      light.visible = !inCathedral(p) || inCathedral(player);
+      light.visible =
+        scene.progress.zone !== 'overworld' ||
+        !inCathedral(p) ||
+        inCathedral(player);
       light.position.set(p.x, p.y - 8);
       light.scale.set(1, 0.7);
       light.alpha = 0.7 + Math.sin(this.renderTime * 7 + id) * 0.1;

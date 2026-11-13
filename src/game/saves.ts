@@ -5,14 +5,17 @@ import { createStores, C, TAG } from './components';
 import { ITEMS } from './items';
 import { createProgress } from './adventure';
 import { initializeExploration } from './exploration-world';
+import { mergeHero } from './realm-travel';
+import type { Journey } from './realm-data';
 import { SITES, WORLD } from './world-data';
 import { ensureEquipmentInstances, type AdventureProgress } from './adventure';
 import type { Scene } from './spawn';
 
-export const SAVE_VERSION = 3;
-export const SAVE_LIMIT = 2_000_000;
+export const SAVE_VERSION = 4;
+export const SAVE_LIMIT = 8_000_000;
 export const SAVE_PREFIX = 'ashen-vale.save.v1.';
 export interface SaveData {
+  journey?: Journey;
   world: WorldSnapshot;
   level: LevelSnapshot;
   player: number;
@@ -266,11 +269,16 @@ function fail(message: string): never {
 function validate(
   data: unknown,
   version = SAVE_VERSION,
+  layers = true,
 ): asserts data is SaveData {
   if (
-    !shape({ world: object, level: object, player: uint, progress: object })(
-      data,
-    )
+    !shape({
+      world: object,
+      level: object,
+      player: uint,
+      progress: object,
+      ...(version >= 4 ? { journey: optional(object) } : {}),
+    })(data)
   )
     fail('存档结构不完整');
   const d = data as SaveData;
@@ -286,63 +294,74 @@ function validate(
         text(v) && (v as string).length > 0 && (v as string).length <= 20,
       nextEquipmentId: uint,
       nextRespawn: number,
-      explored: array(key),
+      explored: array(key, 20000),
+      ...(version >= 4
+        ? { zone: one('overworld', 'mine', 'roots', 'jail') }
+        : {}),
       openedChests: array(key),
       purified: array(key),
       bosses: array(key),
       ...(version === 1
         ? {}
         : {
-            worldVersion: one(version === 2 ? 2 : 3),
+            worldVersion: one(version === 2 ? 2 : version === 3 ? 3 : 4),
             discovered: array(one(...SITES.map((s) => s.id)), SITES.length),
             waypoints: array(
               one(
                 ...SITES.filter((s) => s.kind === 'waypoint').map((s) => s.id),
               ),
-              6,
+              12,
             ),
             startedSites: array(
               one(...SITES.filter((s) => s.guards > 0).map((s) => s.id)),
               SITES.length,
             ),
             trackedSite: one('', ...SITES.map((s) => s.id)),
-            lastRegion: one('', 'vale', 'forest', 'sanctum'),
+            lastRegion: one(
+              '',
+              'vale',
+              'forest',
+              'sanctum',
+              'marsh',
+              'highland',
+              'waste',
+            ),
             campReadyAt: number,
             travelReadyAt: number,
           }),
     })(d.progress)
   )
     fail('角色进度数据无效');
+  const w =
+    version === 1
+      ? 96
+      : version === 2
+        ? 128
+        : version === 3
+          ? 256
+          : d.progress.zone === 'overworld'
+            ? WORLD.width
+            : 80;
+  const h =
+    version === 1
+      ? 72
+      : version === 2
+        ? 96
+        : version === 3
+          ? 192
+          : d.progress.zone === 'overworld'
+            ? WORLD.height
+            : 80;
   if (
     !shape({
-      w: one(version === 1 ? 96 : version === 2 ? 128 : WORLD.width),
-      h: one(version === 1 ? 72 : version === 2 ? 96 : WORLD.height),
+      w: one(w),
+      h: one(h),
       tiles: array(
         version < 3 ? one(0, 1, 2, 3, 4, 5, 6) : one(0, 1, 2, 3, 4, 5, 6, 7, 8),
-        version === 1
-          ? 6912
-          : version === 2
-            ? 12288
-            : WORLD.width * WORLD.height,
-        version === 1
-          ? 6912
-          : version === 2
-            ? 12288
-            : WORLD.width * WORLD.height,
+        w * h,
+        w * h,
       ),
-      southWalls: array(
-        one(0, 1),
-        version === 1
-          ? 6912
-          : version === 2
-            ? 12288
-            : WORLD.width * WORLD.height,
-        version === 1
-          ? 6912
-          : version === 2
-            ? 12288
-            : WORLD.width * WORLD.height,
-      ),
+      southWalls: array(one(0, 1), w * h, w * h),
       spawn: vec,
       blockers: array(shape(nums('x y r')), 5000),
       revision: uint,
@@ -530,6 +549,56 @@ function validate(
         fail('地裂法术组缺失');
     }
   }
+  if (layers && d.journey) {
+    if (
+      !shape({
+        layers: object,
+        returnAt: vec,
+        returnTracked: optional(one('', ...SITES.map((s) => s.id))),
+      })(d.journey) ||
+      Object.keys(d.journey.layers).length > 3
+    )
+      fail('地图旅程数据无效');
+    const returnAt = d.journey.returnAt;
+    if (
+      returnAt.x < 0 ||
+      returnAt.y < 0 ||
+      returnAt.x > WORLD.width * 32 ||
+      returnAt.y > WORLD.height * 32
+    )
+      fail('返回坐标无效');
+    for (const [zone, layer] of Object.entries(d.journey.layers)) {
+      if (
+        !['overworld', 'mine', 'roots', 'jail'].includes(zone) ||
+        zone === d.progress.zone ||
+        !shape({ world: object, level: object })(layer)
+      )
+        fail('休眠地图无效');
+      if (
+        !Array.isArray(layer.world.entities) ||
+        !object(layer.world.stores) ||
+        layer.world.entities.some((e) => e.id === d.player) ||
+        Object.values(layer.world.stores).some(
+          (entries) =>
+            !Array.isArray(entries) || entries.some((e) => e.id === d.player),
+        )
+      )
+        fail('休眠地图包含角色副本');
+      validate(
+        {
+          world: mergeHero(layer.world, d.world, d.player, layer.level.spawn),
+          level: layer.level,
+          player: d.player,
+          progress: { ...d.progress, zone },
+        },
+        version,
+        false,
+      );
+    }
+    if (d.progress.zone !== 'overworld' && !d.journey.layers.overworld)
+      fail('地下城缺失返回地图');
+  } else if (version >= 4 && layers && d.progress.zone !== 'overworld')
+    fail('地下城缺失旅程数据');
 }
 
 export function captureSave(scene: Scene, now = new Date()): SaveRecord {
@@ -540,6 +609,7 @@ export function captureSave(scene: Scene, now = new Date()): SaveRecord {
     level: scene.level.snapshot(),
     player: scene.player,
     progress: structuredClone(scene.progress),
+    ...(scene.journey ? { journey: structuredClone(scene.journey) } : {}),
   };
   // 对话是窗口状态，重进时在原地继续，不重开已完成的对话事务。
   for (const entry of data.world.stores[C.JOURNAL])
@@ -561,18 +631,24 @@ export function parseSave(raw: string): SaveRecord {
   } catch {
     fail('文件不是有效的 JSON 存档');
   }
+  if (object(record) && record.levelEncoding === 'rle1') {
+    if (record.version !== 4 || !object(record.data)) fail('压缩格式无效');
+    inflateLevels(record.data);
+    delete record.levelEncoding;
+  }
   if (!object(record) || record.format !== 'ashen-vale')
     fail('这不是灰烬谷存档');
   if (
     record.version !== 1 &&
     record.version !== 2 &&
+    record.version !== 3 &&
     record.version !== SAVE_VERSION
   )
     fail('存档版本不兼容，请使用对应版本的游戏');
   if (
     !shape({
       format: one('ashen-vale'),
-      version: one(1, 2, SAVE_VERSION),
+      version: one(1, 2, 3, SAVE_VERSION),
       savedAt: text,
       checksum: text,
       data: object,
@@ -609,7 +685,10 @@ export function restoreSave(record: SaveRecord): Scene {
           }
         : structuredClone(data.progress),
   };
-  initializeExploration(scene);
+  if (record.version < 4) scene.progress.zone = 'overworld';
+  if (data.journey)
+    Object.assign(scene, { journey: structuredClone(data.journey) });
+  if (scene.progress.zone === 'overworld') initializeExploration(scene);
   return scene;
 }
 
@@ -670,19 +749,91 @@ export class SaveRepository {
     return record;
   }
   private commit(slot: number, record: SaveRecord): void {
-    const current = JSON.stringify(record);
+    const current = serializeSave(record);
     const previous = this.read(slot).record;
     if (previous?.checksum === record.checksum) return;
     const raw = JSON.stringify({
       current,
-      backup: previous ? JSON.stringify(previous) : null,
+      backup: previous ? serializeSave(previous) : null,
     });
     this.storage.setItem(this.key(slot), raw);
-    this.cache.set(slot, { raw, record: current });
+    this.cache.set(slot, { raw, record: JSON.stringify(record) });
   }
 
   private key(slot: number): string {
     if (!Number.isInteger(slot) || slot < 0 || slot > 2) fail('只有三个存档位');
     return SAVE_PREFIX + slot;
   }
+}
+
+function pack(values: number[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < values.length; ) {
+    let end = i + 1;
+    while (end < values.length && values[end] === values[i]) end++;
+    out.push(values[i], end - i);
+    i = end;
+  }
+  return out;
+}
+function inflateLevels(data: Record<string, unknown>): void {
+  const decode = (level: unknown): void => {
+    if (
+      !object(level) ||
+      !Number.isInteger(level.w) ||
+      !Number.isInteger(level.h) ||
+      (level.w as number) < 1 ||
+      (level.h as number) < 1 ||
+      (level.w as number) > 512 ||
+      (level.h as number) > 384
+    )
+      fail('压缩地图尺寸无效');
+    const count = (level.w as number) * (level.h as number);
+    for (const [name, max] of [
+      ['tiles', 8],
+      ['southWalls', 1],
+    ] as const) {
+      const runs = level[name];
+      if (!Array.isArray(runs) || runs.length % 2 || runs.length > count * 2)
+        fail('压缩地图数据无效');
+      const out: number[] = [];
+      for (let i = 0; i < runs.length; i += 2) {
+        const value = runs[i],
+          n = runs[i + 1];
+        if (
+          !Number.isInteger(value) ||
+          value < 0 ||
+          value > max ||
+          !Number.isInteger(n) ||
+          n < 1 ||
+          out.length + n > count
+        )
+          fail('压缩地图长度无效');
+        for (let j = 0; j < n; j++) out.push(value);
+      }
+      if (out.length !== count) fail('压缩地图不完整');
+      level[name] = out;
+    }
+  };
+  decode(data.level);
+  if (object(data.journey) && object(data.journey.layers)) {
+    if (Object.keys(data.journey.layers).length > 3) fail('休眠地图过多');
+    for (const layer of Object.values(data.journey.layers)) {
+      if (!object(layer)) fail('休眠地图无效');
+      decode(layer.level);
+    }
+  }
+}
+export function serializeSave(record: SaveRecord): string {
+  if (record.version < 4) return JSON.stringify(record);
+  const copy = structuredClone(record),
+    encode = (level: LevelSnapshot): void => {
+      level.tiles = pack(level.tiles);
+      level.southWalls = pack(level.southWalls);
+    };
+  encode(copy.data.level);
+  if (copy.data.journey)
+    for (const layer of Object.values(copy.data.journey.layers))
+      encode(layer.level);
+  return JSON.stringify({ ...copy, levelEncoding: 'rle1' });
 }

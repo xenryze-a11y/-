@@ -7,9 +7,10 @@ import { expandLevel, siteLocations } from './world-layout';
 import { SITE_SPRITES, WORLD, roadClearance, regionAt } from './world-data';
 import { groveClearance } from './grove';
 export function initializeExploration(scene: Scene): void {
-  if (scene.progress.worldVersion === 3) return;
+  if (scene.progress.worldVersion === 4) return;
   if (scene.level.w !== WORLD.width || scene.level.h !== WORLD.height)
     scene.level = expandLevel(scene.level, scene.progress.seed);
+  const previousVersion = scene.progress.worldVersion;
   const { world, s, level } = scene,
     locations = siteLocations(level, scene.progress.seed),
     rng = makeRng(scene.progress.seed ^ 0x812afe);
@@ -53,16 +54,23 @@ export function initializeExploration(scene: Scene): void {
         SITE_SPRITES[d.kind],
         p.x,
         p.y,
-        d.kind === 'vista' ? 80 : 64,
-        d.kind === 'waypoint' ? 88 : d.kind === 'shrine' ? 88 : 64,
+        d.kind === 'dungeon' ? 96 : d.kind === 'vista' ? 80 : 64,
+        d.kind === 'dungeon'
+          ? 112
+          : d.kind === 'waypoint'
+            ? 88
+            : d.kind === 'shrine'
+              ? 88
+              : 64,
         d.kind === 'camp' ? 8 : 10,
         d.id,
       );
-  for (let i = 0; i < 760; i++) {
+  for (let i = 0; i < 2800; i++) {
     const x = (3 + rng() * (level.w - 6)) * 32,
       y = (3 + rng() * (level.h - 6)) * 32;
     if (
-      (scene.progress.worldVersion === 2 && x < 128 * 32 && y < 96 * 32) ||
+      (previousVersion === 2 && x < 128 * 32 && y < 96 * 32) ||
+      (previousVersion === 3 && x < 256 * 32 && y < 192 * 32) ||
       groveClearance(x, y) ||
       level.at(Math.floor(x / 32), Math.floor(y / 32)) === 4 ||
       roadClearance(x, y) ||
@@ -73,7 +81,7 @@ export function initializeExploration(scene: Scene): void {
     )
       continue;
     const region = regionAt({ x, y }),
-      forest = region === 'forest',
+      forest = region === 'forest' || region === 'marsh',
       meadow = region === 'vale';
     if (Math.sin(x / 220) + Math.cos(y / 190) > 0.75 && rng() < 0.8) continue;
     prop(
@@ -95,8 +103,42 @@ export function initializeExploration(scene: Scene): void {
   }
   // 为地标建立可读的前庭和侧景，避免把孤立建筑撒在噪声地毯上。
   for (const { definition: d, position: fallback } of locations) {
+    if (existing.has(d.id)) continue;
     const id = s.prop.owners.find((e) => s.prop.get(e)?.landmark === d.id),
       p = id ? world.pos(id) : fallback;
+    if (['marsh', 'highland', 'waste'].includes(d.region)) {
+      const pieces =
+        d.region === 'marsh'
+          ? [
+              ['propBlightTree', -160, -65, 96, 128],
+              ['propFungus', 130, 100, 64, 48],
+              ['propCrate', -130, 125, 32, 32],
+              ['propTorch', 135, -80, 16, 32],
+            ]
+          : d.region === 'highland'
+            ? [
+                ['propDeadTree', -170, -110, 96, 128],
+                ['propRock', 155, 115, 24, 24],
+                ['propRuinPillar', 130, -70, 64, 96],
+                ['propTorch', -130, 105, 16, 32],
+              ]
+            : [
+                ['propDeadTree', -180, -100, 96, 128],
+                ['propDeadTree', 160, 120, 96, 128],
+                ['propRock', 135, -115, 24, 24],
+                ['propTorch', -125, 105, 16, 32],
+              ];
+      for (const [sprite, dx, dy, w, h] of pieces)
+        if (!level.blocked(p.x + (dx as number), p.y + (dy as number), 10))
+          prop(
+            sprite as string,
+            p.x + (dx as number),
+            p.y + (dy as number),
+            w as number,
+            h as number,
+            0,
+          );
+    }
     const tx = Math.floor(p.x / 32),
       ty = Math.floor(p.y / 32),
       radius = d.kind === 'shrine' || d.kind === 'vista' ? 4 : 2;
@@ -134,5 +176,5 @@ export function initializeExploration(scene: Scene): void {
           );
   }
   level.revision++;
-  scene.progress.worldVersion = 3;
+  scene.progress.worldVersion = 4;
 }

@@ -1,4 +1,5 @@
 /** 世界进度属于模拟；未来的探索/首领/净化节点使用稳定内容 ID。 */
+import type { ZoneId } from './realm-data';
 import type { RegionId } from './world-data';
 import type { Scene } from './spawn';
 import type { ItemStack, EquipmentInstance } from './inventory';
@@ -6,6 +7,7 @@ import { ITEMS } from './items';
 
 export type RunMode = 'adventure' | 'trial';
 export interface AdventureProgress {
+  zone: ZoneId;
   seed: number;
   mode: RunMode;
   name: string;
@@ -30,6 +32,7 @@ export function createProgress(
   name: string,
 ): AdventureProgress {
   return {
+    zone: 'overworld',
     seed,
     mode,
     name: name.trim().slice(0, 20) || '灰烬旅人',

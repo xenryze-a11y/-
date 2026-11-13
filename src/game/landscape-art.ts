@@ -7,6 +7,14 @@ import { regionAt } from './world-data';
 export function landscapeSpecs(): Spec[] {
   const out: Spec[] = [];
   for (const name of [
+    'terrainMarsh',
+    'terrainHighland',
+    'terrainWaste',
+    'terrainBoardwalk',
+    'terrainDungeonMine',
+    'terrainDungeonRoots',
+    'terrainDungeonJail',
+    'terrainDungeonVoid',
     'terrainMeadow',
     'terrainEarth',
     'terrainFlowers',
@@ -33,6 +41,7 @@ export function landscapeSpecs(): Spec[] {
       },
     });
   for (const [name, w, h] of [
+    ['propDungeonPortal', 96, 112],
     ['propRuinPillar', 64, 96],
     ['propDeadTree', 96, 128],
     ['propFungus', 64, 48],
@@ -140,7 +149,7 @@ export function landscapeGroundFrame(
   if (tile === Tile.FLOOR || tile === Tile.WALL) return;
   if (tile === Tile.WATER) return 'terrainWater';
   if (tile === Tile.STAIRS) return 'terrainStairs';
-  if (tile === Tile.CLIFF) return 'terrainTerrace';
+  if (tile === Tile.CLIFF) return 'terrainCliffDark';
   if (
     tile === Tile.ROAD &&
     [
@@ -150,7 +159,8 @@ export function landscapeGroundFrame(
       [0, -1],
     ].some(([dx, dy]) => level.at(x + dx, y + dy) === Tile.WATER)
   )
-    return 'terrainTrail';
+    return region === 'marsh' ? 'terrainBoardwalk' : 'terrainTrail';
+  if (region === 'marsh' && tile === Tile.ROAD) return 'terrainBoardwalk';
   if (tile === Tile.ROAD)
     return region === 'sanctum'
       ? 'terrainTrail'
@@ -159,8 +169,13 @@ export function landscapeGroundFrame(
         : 'terrainEarth';
   if (tile === Tile.DIRT)
     return region === 'forest' ? 'terrainRoots' : 'terrainEarth';
+  if (region === 'waste' && (tile === Tile.STONE || tile === Tile.GRASS))
+    return 'terrainWaste';
   if (tile === Tile.STONE)
     return region === 'sanctum' ? 'terrainRuin' : 'terrainRubble';
+  if (region === 'marsh') return 'terrainMarsh';
+  if (region === 'highland') return 'terrainHighland';
+  if (region === 'waste') return 'terrainWaste';
   if (region === 'forest')
     return Math.sin(x * 0.035) + Math.cos(y * 0.05) > 0.65
       ? 'terrainBlight'

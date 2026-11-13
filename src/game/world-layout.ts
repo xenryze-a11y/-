@@ -1,10 +1,11 @@
 /** 世界布局只依赖种子和 Level；地标一律落在从出生点可达的完整空地上。 */
+import { carveFrontier } from './frontier-layout';
 import { Level, Tile, TILE } from '../engine/level';
 import { makeRng, type Vec2 } from '../engine/math';
 import { TERRACES, riverCenter } from './landscape-design';
 import { createGroveLevel, groveClearance } from './grove';
 import {
-  SITES,
+  SURFACE_SITES,
   WORLD,
   regionAt,
   roadClearance,
@@ -35,14 +36,14 @@ export function expandLevel(old: Level, seed: number): Level {
   Object.assign(level.spawn, old.spawn);
   for (const b of old.snapshot().blockers) level.addBlocker(b.x, b.y, b.r);
   // 溪流留在新扩区域，主路与溪流交汇处自然形成石桥。
-  for (let y = 97; y < level.h - 3; y++)
-    for (let x = 1; x < level.w - 1; x++) {
+  for (let y = 97; y < Math.min(192, level.h) - 3; y++)
+    for (let x = 1; x < Math.min(256, level.w) - 1; x++) {
       const river = Math.abs(x - riverCenter(y));
       const pond = ((x - 176) / 13) ** 2 + ((y - 178) / 7) ** 2 < 1;
       if (river < 2.6 || pond) level.tiles[y * level.w + x] = Tile.WATER;
     }
-  for (let y = 1; y < level.h - 1; y++)
-    for (let x = 1; x < level.w - 1; x++)
+  for (let y = 1; y < Math.min(192, level.h) - 1; y++)
+    for (let x = 1; x < Math.min(256, level.w) - 1; x++)
       if (roadClearance((x + 0.5) * 32, (y + 0.5) * 32)) {
         level.tiles[y * level.w + x] = Tile.ROAD;
         level.southWalls[y * level.w + x] = 0;
@@ -64,6 +65,7 @@ export function expandLevel(old: Level, seed: number): Level {
       for (let x = hill.gate - 2; x <= hill.gate + 2; x++)
         level.tiles[y * level.w + x] = Tile.STAIRS;
   }
+  carveFrontier(level, seed, old.w, old.h);
   level.revision++;
   return level;
 }
@@ -109,7 +111,7 @@ export function siteLocations(level: Level, seed: number): SiteLocation[] {
     }
   }
   const out: SiteLocation[] = [];
-  for (const definition of SITES) {
+  for (const definition of SURFACE_SITES) {
     const anchor = {
       x:
         definition.x +

@@ -38,6 +38,8 @@ import {
 } from './inventory';
 import type { Ctx } from './systems/context';
 import { UI_TEMPLATE } from './ui-template';
+import { DUNGEONS } from './realm-data';
+import { bindMobileStick } from './mobile-stick';
 import { bindLandscapeButtons } from './mobile-display';
 import { SaveMenu, type SaveActions } from './save-menu';
 import './ui.css';
@@ -53,6 +55,8 @@ export interface UIActions {
   interact(): void;
   graphics(): string;
   graphicsLabel(): string;
+  view(): string;
+  viewLabel(): string;
   explore(command: ExplorationCommand): void;
   saves: SaveActions;
   checkpoint(): void;
@@ -65,6 +69,7 @@ export class GameUI {
   menuOpen = true;
   inventoryOpen = false;
   touch = matchMedia('(pointer:coarse)').matches;
+  private releaseStick: () => void = () => {};
   private helpOpen = false;
   private split = false;
   private quick = false;
@@ -94,6 +99,7 @@ export class GameUI {
     bindLandscapeButtons(this.element, (message) => this.toast(message));
     this.setTouch(this.touch);
     this.q('#av-quality-button').textContent = actions.graphicsLabel();
+    this.q('#av-view-button').textContent = actions.viewLabel();
     this.renderInventory();
     this.setMenu(true);
   }
@@ -287,7 +293,15 @@ export class GameUI {
     this.q('#av-exploration-objective').textContent = tracked
       ? `◇ ${tracked.definition.name} · ${Math.round(Math.hypot(tracked.position.x - at.x, tracked.position.y - at.y) / 16)} 米 · ${tracked.position.x > at.x + 32 ? '东' : tracked.position.x < at.x - 32 ? '西' : ''}${tracked.position.y > at.y + 32 ? '南' : tracked.position.y < at.y - 32 ? '北' : ''} · M 地图`
       : 'M 地图 · 沿道路发现新地点';
-    this.q('#av-quest-objective').textContent = questObjective(ctx);
+    const underground = ctx.progress.zone !== 'overworld';
+    this.q('#av-quest-tracker > b').textContent = underground
+      ? DUNGEONS[ctx.progress.zone as keyof typeof DUNGEONS].name
+      : '神树的守望';
+    this.q('#av-quest-objective').textContent = underground
+      ? ctx.progress.bosses.includes(ctx.progress.zone + '-warden')
+        ? '核心已清除，回环近路已开启；可继续搜寻侧室遗箱。'
+        : '探索岔路，清除核心守卫；入口可返回地表。'
+      : questObjective(ctx);
     this.q('#av-xp').textContent =
       `等级 ${j.level} · ${j.xp} / ${levelRequirement(j.level)} 经验`;
     if (def) {
@@ -338,6 +352,7 @@ export class GameUI {
         this.toast(ev.text);
   }
   setInventory(open: boolean): void {
+    if (open) this.releaseStick();
     this.inventoryOpen = open;
     this.input.reset();
     this.element.classList.toggle('inventory-open', open);
@@ -349,6 +364,7 @@ export class GameUI {
     else this.q<HTMLButtonElement>('#av-bag-button').blur();
   }
   setWorldMap(open: boolean): void {
+    if (open) this.releaseStick();
     if (
       !this.running ||
       this.context().gameOver ||
@@ -365,7 +381,10 @@ export class GameUI {
     } else this.worldMap.close();
   }
   setMenu(open: boolean): void {
-    if (open) this.worldMap.close();
+    if (open) {
+      this.worldMap.close();
+      this.releaseStick();
+    }
     this.menuOpen = open;
     this.input.reset();
     this.q('#av-menu2').hidden = !open;
@@ -392,11 +411,13 @@ export class GameUI {
     this.toast('C 与圣使交谈 · 向南探索教堂 · E 四部位换装');
   }
   private setHelp(open: boolean): void {
+    if (open) this.releaseStick();
     this.helpOpen = open;
     this.q('#av-help').hidden = !open;
     this.input.reset();
   }
   private setTouch(touch: boolean): void {
+    this.releaseStick();
     this.touch = touch;
     this.element.classList.toggle('touch-mode', touch);
     this.q('#av-touch-button').textContent = '触控：' + (touch ? '开' : '关');
@@ -567,6 +588,9 @@ export class GameUI {
     this.q('#av-recipes').onclick = () => this.setHelp(true);
     this.q('#av-close-help').onclick = () => this.setHelp(false);
     this.q('#av-touch-button').onclick = () => this.setTouch(!this.touch);
+    this.q('#av-view-button').onclick = () => {
+      this.q('#av-view-button').textContent = this.actions.view();
+    };
     this.q('#av-quality-button').onclick = () => {
       this.q('#av-quality-button').textContent = this.actions.graphics();
     };
@@ -751,39 +775,11 @@ export class GameUI {
     }
   }
   private touchEvents(): void {
-    const stick = this.q('#av-stick2'),
-      knob = this.q('#av-stick-knob');
-    let pointer: number | null = null;
-    const move = (e: PointerEvent): void => {
-      const r = stick.getBoundingClientRect(),
-        radius = r.width * 0.34;
-      let x = e.clientX - r.left - r.width / 2,
-        y = e.clientY - r.top - r.height / 2;
-      const length = Math.hypot(x, y);
-      if (length > radius) {
-        x = (x / length) * radius;
-        y = (y / length) * radius;
-      }
-      knob.style.transform = `translate(calc(-50% + ${x}px),calc(-50% + ${y}px))`;
-      this.input.setTouchAxis(x / radius, y / radius);
-    };
-    stick.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      pointer = e.pointerId;
-      stick.setPointerCapture(pointer);
-      move(e);
-    });
-    stick.addEventListener('pointermove', (e) => {
-      if (pointer === e.pointerId) move(e);
-    });
-    for (const kind of ['pointerup', 'pointercancel', 'lostpointercapture'])
-      stick.addEventListener(kind, (e) => {
-        if (pointer === (e as PointerEvent).pointerId) {
-          pointer = null;
-          knob.style.transform = 'translate(-50%,-50%)';
-          this.input.setTouchAxis(0, 0);
-        }
-      });
+    this.releaseStick = bindMobileStick(
+      this.element,
+      this.input,
+      () => this.touch && !this.paused,
+    );
     for (const button of this.element.querySelectorAll<HTMLButtonElement>(
       '[data-mage]',
     )) {

@@ -185,3 +185,7 @@ World.snapshot/restore 保存纯组件、实体分配器和 RNG 状态，快照�
 
 
 大地图新增 CLIFF=7（阻挡及视线遮挡）、STAIRS=8（可通行），保存v3，Level恢复要重建阻挡体空间桶。渲染分块/裁剪/画质不写模拟；远处AI休眠以世界距离判断，不读渲染可见性。保存自有Scene可以走writeScene减少重复检查；write和导入仍按完整格式验证，缓存不能向外暴露可变的内部记录。
+
+## 地图层与跨图
+
+Scene可含纯数据journey；progress.zone选择活动层。穿门为组装层命令，在固定步之外经realm-travel转移唯一玩家；休眠层无玩家且不模拟。main同步scene/ctx后重置表现、镜头与输入，不改原固定系统顺序。不能在表现层复制背包或重跑角色初始化。所有地图层导入均经完整验证，见 [六域远征](ARPG_EXPEDITION.md)。

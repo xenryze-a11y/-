@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import './saves.test';
 import './exploration.test';
 import './landscape.test';
+import './expedition.test';
 import {
   castMage,
   updateMage,

@@ -90,7 +90,7 @@ export function applyDamage(
       ctx,
       p.x,
       p.y,
-      wood ? 'wood' : 'stone',
+      prop.sprite === 'propFungus' ? 'herb' : wood ? 'wood' : 'stone',
       prop.sprite === 'propTree' ? 3 : 2,
     );
   } else if (ctx.world.hasTag(target, TAG.MOB)) {

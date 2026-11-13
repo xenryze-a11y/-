@@ -1,4 +1,5 @@
 /** 组装一局：地图 + 玩家 + 亡者 + 场景物件。对应 goengine 的 game/ 组装层。 */
+import type { Journey } from './realm-data';
 import { World, type Entity } from '../engine/ecs';
 import { Level, TILE, Tile } from '../engine/level';
 import { makeRng, type Vec2 } from '../engine/math';
@@ -10,7 +11,7 @@ import {
   siteLocations,
   type SiteLocation,
 } from './world-layout';
-import { roadClearance } from './world-data';
+import { roadClearance, regionAt } from './world-data';
 import { initializeExploration } from './exploration-world';
 import { SANCTUARY, NPCS } from './sanctuary-data';
 import { GROVE } from './mage-data';
@@ -25,6 +26,7 @@ import {
 import { syncEquipment } from './inventory';
 
 export interface Scene {
+  journey?: Journey;
   world: World;
   s: Stores;
   level: Level;
@@ -216,6 +218,15 @@ export function buildScene(
   for (const def of props) {
     for (let i = 0; i < def.count; i++) {
       const p = findSpot(level, rng, 120, sites);
+      const region = regionAt(p),
+        sprite =
+          def.sprite === 'propTree'
+            ? region === 'waste' || region === 'highland'
+              ? 'propDeadTree'
+              : region === 'forest' || region === 'marsh'
+                ? 'propBlightTree'
+                : 'propTree'
+            : def.sprite;
       if (def.blocks) level.addBlocker(p.x, p.y, def.r);
       const e = world.createAt(
         [TAG.PROP, ...(def.blocks ? [TAG.DAMAGEABLE] : [])],
@@ -224,7 +235,7 @@ export function buildScene(
       );
       s.radius.set(e, { r: def.r || 6 });
       s.prop.set(e, {
-        sprite: def.sprite,
+        sprite,
         w: def.w,
         h: def.h,
         blocks: def.blocks,
@@ -234,7 +245,7 @@ export function buildScene(
         scale: 1,
         showHealth: false,
         animated: false,
-        staticSprite: def.sprite,
+        staticSprite: sprite,
       });
       if (def.blocks) s.health.set(e, { hp: 28, max: 28, armor: 0 });
     }

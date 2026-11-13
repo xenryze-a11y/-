@@ -1,4 +1,5 @@
 /** 发现、迷雾、营地、守卫与奖励都是纯模拟规则；地图只读取这里的状态。 */
+import { travelRealm, openDungeonShortcut } from '../realm-travel';
 import { dist, type Vec2 } from '../../engine/math';
 import { addItem, notice } from '../inventory';
 import { ensureEquipmentInstances } from '../adventure';
@@ -6,7 +7,7 @@ import {
   SITES,
   REGIONS,
   WORLD,
-  regionAt,
+  regionForZone,
   type SiteDefinition,
 } from '../world-data';
 import { inCathedral } from '../sanctuary-data';
@@ -37,7 +38,11 @@ export function completedSite(
   s: SiteDefinition,
 ): boolean {
   return (
-    s.kind === 'shrine' ? ctx.progress.purified : ctx.progress.openedChests
+    s.kind === 'boss'
+      ? ctx.progress.bosses
+      : s.kind === 'shrine'
+        ? ctx.progress.purified
+        : ctx.progress.openedChests
   ).includes(s.id);
 }
 export function nearbySite(ctx: Ctx): SiteState | undefined {
@@ -46,7 +51,8 @@ export function nearbySite(ctx: Ctx): SiteState | undefined {
     .filter(
       (s) =>
         dist(p, s.position) <= WORLD.interact &&
-        inCathedral(p) === inCathedral(s.position) &&
+        (ctx.progress.zone !== 'overworld' ||
+          inCathedral(p) === inCathedral(s.position)) &&
         ctx.level.lineClear(p, s.position),
     )
     .sort((a, b) => dist(p, a.position) - dist(p, b.position))[0];
@@ -63,12 +69,16 @@ export function exploredCells(ctx: Pick<Ctx, 'progress'>): Set<string> {
   }
   return cache.set;
 }
-export function fogKey(x: number, y: number): string {
-  return `fog:${x}:${y}`;
+export function fogKey(x: number, y: number, zone = 'overworld'): string {
+  return `${zone === 'overworld' ? '' : zone + ':'}fog:${x}:${y}`;
 }
 export function exploredAt(ctx: Pick<Ctx, 'progress'>, p: Vec2): boolean {
   return exploredCells(ctx).has(
-    fogKey(Math.floor(p.x / WORLD.fogCell), Math.floor(p.y / WORLD.fogCell)),
+    fogKey(
+      Math.floor(p.x / WORLD.fogCell),
+      Math.floor(p.y / WORLD.fogCell),
+      ctx.progress.zone,
+    ),
   );
 }
 export function reveal(
@@ -98,7 +108,7 @@ export function reveal(
       x++
     ) {
       const center = { x: (x + 0.5) * cell, y: (y + 0.5) * cell },
-        key = fogKey(x, y);
+        key = fogKey(x, y, ctx.progress.zone);
       if (
         !cells.has(key) &&
         dist(p, center) <= radius &&
@@ -117,12 +127,12 @@ const fogPosition = new WeakMap<object, string>();
 export function updateExploration(ctx: Ctx): void {
   if (ctx.gameOver) return;
   const p = ctx.world.pos(ctx.player),
-    cell = `${Math.floor(p.x / 32)}:${Math.floor(p.y / 32)}`;
+    cell = `${ctx.progress.zone}:${Math.floor(p.x / 32)}:${Math.floor(p.y / 32)}`;
   if (fogPosition.get(ctx.progress) !== cell) {
     fogPosition.set(ctx.progress, cell);
     reveal(ctx, p);
   }
-  const region = regionAt(p);
+  const region = regionForZone(ctx.progress.zone, p);
   if (ctx.progress.lastRegion !== region) {
     ctx.progress.lastRegion = region;
     const r = REGIONS[region];
@@ -135,7 +145,8 @@ export function updateExploration(ctx: Ctx): void {
     if (
       !ctx.progress.discovered.includes(s.definition.id) &&
       dist(p, s.position) <= WORLD.discover &&
-      inCathedral(p) === inCathedral(s.position) &&
+      (ctx.progress.zone !== 'overworld' ||
+        inCathedral(p) === inCathedral(s.position)) &&
       ctx.level.lineClear(p, s.position)
     ) {
       ctx.progress.discovered.push(s.definition.id);
@@ -197,10 +208,13 @@ function landing(ctx: Ctx, position: Vec2): Vec2 | undefined {
 export function applyExplorationCommand(
   ctx: Ctx,
   command: ExplorationCommand,
-): { openMap?: boolean; teleported?: boolean } {
+): { openMap?: boolean; teleported?: boolean; zoneChanged?: boolean } {
   if (ctx.gameOver) return {};
   if (command.type === 'track') {
-    if (ctx.progress.discovered.includes(command.id)) {
+    if (
+      ctx.progress.discovered.includes(command.id) &&
+      worldSites(ctx).some((s) => s.definition.id === command.id)
+    ) {
       ctx.progress.trackedSite = command.id;
       notice(ctx, '追踪 ' + SITES.find((d) => d.id === command.id)!.name);
     }
@@ -249,32 +263,22 @@ export function applyExplorationCommand(
   const d = here.definition,
     p = ctx.progress;
   if (!p.discovered.includes(d.id)) p.discovered.push(d.id);
-  if (d.kind === 'waypoint') {
-    if (!p.waypoints.includes(d.id)) {
-      p.waypoints.push(d.id);
-      notice(ctx, '激活 ' + d.name + ' · 可连接已激活的界石');
-    }
-    return { openMap: true };
-  }
-  if (d.kind === 'camp') {
+  if (d.kind === 'dungeon' || d.kind === 'exit') {
     if (!safeToTravel(ctx)) {
-      notice(ctx, '附近仍有敌人或持续法术，暂时不能休息');
+      notice(ctx, '先脱离战斗并等待持续法术结束，再穿过入口');
       return {};
     }
-    if (ctx.world.time < p.campReadyAt) {
-      notice(
-        ctx,
-        `营火余温未散 · ${Math.ceil(p.campReadyAt - ctx.world.time)} 秒后可再休息`,
-      );
-      return {};
-    }
-    const hp = ctx.s.health.get(ctx.player)!,
-      player = ctx.s.player.get(ctx.player)!;
-    hp.hp = hp.max;
-    player.mana = player.maxMana;
-    p.campReadyAt = ctx.world.time + 30;
-    notice(ctx, '在 ' + d.name + ' 歇息 · 生命与法力恢复');
-    return {};
+    const destination = d.kind === 'exit' ? 'overworld' : d.destination!;
+    travelRealm(ctx, destination);
+    reveal(ctx, ctx.world.pos(ctx.player));
+    updateExploration(ctx);
+    notice(
+      ctx,
+      destination === 'overworld'
+        ? '返回地表 · 地下城探索已保留'
+        : '进入 ' + d.name + ' · 沿路标寻找核心守卫',
+    );
+    return { teleported: true, zoneChanged: true };
   }
   if (completedSite(ctx, d)) {
     notice(
@@ -310,6 +314,7 @@ export function applyExplorationCommand(
         v.x,
         v.y,
         d.id,
+        d.region,
       ),
     );
     p.startedSites.push(d.id);
@@ -321,6 +326,41 @@ export function applyExplorationCommand(
     notice(ctx, `仍有 ${guards} 名守卫，清除后再来`);
     return {};
   }
+  if (
+    (d.kind === 'camp' || d.kind === 'waypoint') &&
+    d.guards &&
+    !p.purified.includes(d.id)
+  ) {
+    p.purified.push(d.id);
+    notice(ctx, '夺回 ' + d.name + ' · 此地成为安全据点');
+  }
+  if (d.kind === 'waypoint') {
+    if (!p.waypoints.includes(d.id)) {
+      p.waypoints.push(d.id);
+      notice(ctx, '激活 ' + d.name + ' · 可连接已激活的界石');
+    }
+    return { openMap: true };
+  }
+  if (d.kind === 'camp') {
+    if (!safeToTravel(ctx)) {
+      notice(ctx, '附近仍有敌人或持续法术，暂时不能休息');
+      return {};
+    }
+    if (ctx.world.time < p.campReadyAt) {
+      notice(
+        ctx,
+        `营火余温未散 · ${Math.ceil(p.campReadyAt - ctx.world.time)} 秒后可再休息`,
+      );
+      return {};
+    }
+    const hp = ctx.s.health.get(ctx.player)!,
+      player = ctx.s.player.get(ctx.player)!;
+    hp.hp = hp.max;
+    player.mana = player.maxMana;
+    p.campReadyAt = ctx.world.time + 30;
+    notice(ctx, '在 ' + d.name + ' 歇息 · 生命与法力恢复');
+    return {};
+  }
   const inv = ctx.s.inventory.get(ctx.player)!,
     copy = structuredClone(inv.slots);
   if (d.reward.some((reward) => addItem(copy, reward.id, reward.count) > 0)) {
@@ -329,13 +369,22 @@ export function applyExplorationCommand(
   }
   inv.slots = copy;
   inv.revision++;
-  (d.kind === 'shrine' ? p.purified : p.openedChests).push(d.id);
+  (d.kind === 'boss'
+    ? p.bosses
+    : d.kind === 'shrine'
+      ? p.purified
+      : p.openedChests
+  ).push(d.id);
+  if (d.kind === 'boss') {
+    openDungeonShortcut(ctx);
+    p.trackedSite = p.zone + '-exit';
+  }
   ensureEquipmentInstances(ctx);
   grantXp(ctx, d.xp);
   if (d.kind === 'vista') reveal(ctx, here.position, 560, true);
   notice(
     ctx,
-    `${d.name} · ${d.kind === 'shrine' ? '净化完成' : d.kind === 'vista' ? '附近地图已展开' : '获得遗物与补给'} · +${d.xp} 经验`,
+    `${d.name} · ${d.kind === 'boss' ? '核心清除 · 回环近路已开启' : d.kind === 'shrine' ? '净化完成' : d.kind === 'vista' ? '附近地图已展开' : '获得遗物与补给'} · +${d.xp} 经验`,
   );
   return {};
 }
