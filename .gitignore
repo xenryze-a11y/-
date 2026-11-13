@@ -4,3 +4,5 @@ dist-standalone/
 *.local
 .DS_Store
 .vite/
+
+/dist-hosted/
