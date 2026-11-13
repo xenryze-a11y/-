@@ -48,3 +48,7 @@
 109项模拟回归，含六区多种子可达、地下城房间可达、三图往返/重载/不重领奖励、唯一角色与装备、v3迁移、RLE与存储配额、防抖/斜向推力、可达地面探索百分比；类型检查、构建及单文件导出。浏览器另检查实际双指移动+技能、松手和暂停、横竖屏/视野档位、地图分区缩放、三座地下城与读档、保护素材与离线运行。最终浏览器巡游的地面纹理峰值16MiB、单纹理源，视野内墙体峰值69；完成三座地下城且全图揭雾的压缩导出约649KB。22张教堂/祭坛/神树/地面/原墙体保护帧与上一生产版像素摘要完全相同。自动化使用软件图形渲染，未把资源预算等同于真机60帧保证。
 
 [地表全图](screenshots/expedition-world.png) · [湿地](screenshots/expedition-marsh.png) · [高地](screenshots/expedition-highland.png) · [荒原](screenshots/expedition-waste.png) · [矿洞](screenshots/expedition-mine.png) · [横屏摇杆](screenshots/expedition-mobile.png)。
+
+发布包仅保留实际使用的两张生成景物（圣龛、废弃小教堂），原完整图与生成原稿仍随源码保留；像素原样裁切后重新装箱，避免把已被卡通覆盖的地表和树重复内嵌。
+
+重打包脚本：`node scripts/pack-retained-landscape.cjs`。

@@ -1,7 +1,7 @@
-/** 原稿经脚本48色/半尺寸/硬透明规范化，仅小图内嵌运行包。 */
+/** 仅内嵌仍在使用的两张生成景物，其他材质由卡通绘制覆盖；原稿完整保留。 */
 import type { BuiltAtlas, Spec, AtlasFrame } from '../engine/art';
-import imageURL from './assets/landscape-pixel.png?inline';
-import metadata from './assets/landscape-pixel-frames.json?raw';
+import imageURL from './assets/landscape-retained.png?inline';
+import metadata from './assets/landscape-retained-frames.json?raw';
 import { Tile, type Level } from '../engine/level';
 import { regionAt } from './world-data';
 export function landscapeSpecs(): Spec[] {
@@ -115,24 +115,6 @@ export async function applyLandscapeArt(atlas: BuiltAtlas): Promise<boolean> {
         g.restore();
       }
     }
-    const cliff = atlas.frames.tileCliffRaised,
-      rock = frames.terrainCliff;
-    g.clearRect(cliff.x, cliff.y, 32, 64);
-    g.drawImage(
-      image,
-      rock.x + 32,
-      rock.y + 32,
-      32,
-      64,
-      cliff.x,
-      cliff.y,
-      32,
-      64,
-    );
-    g.fillStyle = '#a2ad7d';
-    g.fillRect(cliff.x, cliff.y, 32, 4);
-    g.fillStyle = '#526d4b';
-    g.fillRect(cliff.x, cliff.y + 4, 32, 4);
     return true;
   } catch (e) {
     console.warn('[atlas] landscape art fallback', e);
