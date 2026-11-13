@@ -513,3 +513,40 @@
     height: 31px;
   }
 }
+
+/* 横屏拇指落点；放在旧断点之后，避免旧92px样式再次覆盖。 */
+#av2.touch-mode #av-stick2 {
+  width: 112px;
+  height: 112px;
+  left: calc(max(48px, 14vw - 56px) + env(safe-area-inset-left, 0px));
+  bottom: 70px;
+}
+#av-stick-knob {
+  width: 44px;
+  height: 44px;
+  transition: transform 35ms linear;
+}
+#av-stick2.held {
+  border-color: #d3cf98;
+  background: #193d32b8;
+}
+#av-stick-zone {
+  position: absolute;
+  left: 0;
+  bottom: 62px;
+  width: 38vw;
+  height: 46vh;
+  pointer-events: auto;
+  touch-action: none;
+}
+.stick-fixed #av-stick-zone {
+  pointer-events: none;
+}
+@media (min-width: 600px) and (orientation: landscape) {
+  #av2.touch-mode #av-stick2 {
+    left: calc(
+      clamp(104px, 14vw, 144px) - 56px + env(safe-area-inset-left, 0px)
+    );
+    bottom: 64px;
+  }
+}

@@ -11,11 +11,13 @@ import {
   type ExplorationCommand,
 } from './game/systems/exploration';
 import { nearbyNpc } from './game/systems/quests';
+import { cameraZoom, type ViewDistance } from './game/display-settings';
 import { CFG } from './game/data';
 import { ensureEquipmentInstances } from './game/adventure';
 import {
   SaveRepository,
   captureSave,
+  serializeSave,
   parseSave,
   restoreSave,
   type SaveRecord,
@@ -47,6 +49,23 @@ import type { Ctx } from './game/systems/context';
 async function boot(): Promise<void> {
   const host = document.getElementById('app');
   if (!host) throw new Error('缺少 #app 容器');
+  let viewDistance: ViewDistance = 'standard';
+  try {
+    const saved = localStorage.getItem('ashen-vale.view');
+    if (saved === 'near' || saved === 'far') viewDistance = saved;
+  } catch {
+    /* 独立画面设置 */
+  }
+  const zoom = (): number =>
+    cameraZoom(
+      innerWidth,
+      innerHeight,
+      matchMedia('(pointer:coarse)').matches,
+      viewDistance,
+    );
+  const viewLabel = (): string =>
+    '视野：' +
+    (viewDistance === 'near' ? '近' : viewDistance === 'far' ? '远' : '标准');
   let graphicsMode: 'auto' | 'power' | 'fine' = 'auto';
   try {
     const stored = localStorage.getItem('ashen-vale.graphics');
@@ -77,7 +96,7 @@ async function boot(): Promise<void> {
   const atlas = await TextureAtlas.load();
   document.getElementById('boot')?.remove();
   const camera = new Camera();
-  camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
+  camera.zoom = zoom();
   camera.w = app.screen.width;
   camera.h = app.screen.height;
   const view = new WorldView(atlas),
@@ -193,7 +212,7 @@ async function boot(): Promise<void> {
     ctx.world.flush();
     const record = slot === null ? captureSave(scene) : saves.read(slot).record;
     if (!record) throw new Error('此槽没有可导出的存档');
-    const blob = new Blob([JSON.stringify(record)], {
+    const blob = new Blob([serializeSave(record)], {
         type: 'application/json',
       }),
       url = URL.createObjectURL(blob),
@@ -218,6 +237,20 @@ async function boot(): Promise<void> {
     pendingEdges = 0;
     loop.reset();
     if (result.openMap) ui.setWorldMap(true);
+    if (result.zoneChanged) {
+      Object.assign(scene, {
+        world: ctx.world,
+        s: ctx.s,
+        level: ctx.level,
+        player: ctx.player,
+        progress: ctx.progress,
+        journey: ctx.journey,
+      });
+      view.setScene(scene);
+      present.clear();
+      camera.boundsW = scene.level.pixelW;
+      camera.boundsH = scene.level.pixelH;
+    }
     if (result.teleported) {
       ui.worldMap.close();
       camera.snap(ctx.world.pos(ctx.player));
@@ -272,6 +305,22 @@ async function boot(): Promise<void> {
         : graphicsMode === 'power'
           ? '画质：省电 30 帧'
           : '画质：精细';
+    },
+    viewLabel,
+    view: () => {
+      viewDistance =
+        viewDistance === 'standard'
+          ? 'far'
+          : viewDistance === 'far'
+            ? 'near'
+            : 'standard';
+      camera.zoom = zoom();
+      try {
+        localStorage.setItem('ashen-vale.view', viewDistance);
+      } catch {
+        /* 可继续游戏 */
+      }
+      return viewLabel();
     },
     graphicsLabel: () =>
       graphicsMode === 'auto'
@@ -348,7 +397,7 @@ async function boot(): Promise<void> {
     app.renderer.resize(innerWidth, innerHeight, resolution());
     camera.w = app.screen.width;
     camera.h = app.screen.height;
-    camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
+    camera.zoom = zoom();
   });
   app.ticker.add((ticker) => {
     const realDT = Math.min(ticker.deltaMS / 1000, 0.1);
@@ -403,7 +452,7 @@ async function boot(): Promise<void> {
         ensureEquipmentInstances(ctx);
       });
       const playerAt = ctx.world.pos(ctx.player);
-      camera.zoom = innerWidth < 600 ? CFG.camera.touchZoom : CFG.camera.zoom;
+      camera.zoom = zoom();
       camera.follow(playerAt, realDT);
       camera.update(realDT);
       present.update(realDT);

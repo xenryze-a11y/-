@@ -38,9 +38,16 @@ export function updateRules(ctx: Ctx): void {
   });
 
   updateExploration(ctx);
-  if (ctx.gameOver) return;
+  if (ctx.gameOver || ctx.progress.zone !== 'overworld') return;
+  // 普通远怪可离场，地点守卫永久保留；全图实体上限不再阻断新区补怪。
+  for (const id of [...ctx.s.mob.owners])
+    if (
+      !ctx.s.mob.get(id)!.site &&
+      Math.hypot(ctx.world.pos(id).x - pp.x, ctx.world.pos(id).y - pp.y) > 2400
+    )
+      ctx.world.destroy(id);
   if (
-    ctx.world.withTag(TAG.MOB).length >= 48 ||
+    ctx.world.withTag(TAG.MOB).length >= 96 ||
     ctx.world.query(pp, 700, TAG.MOB).length >= 10 ||
     ctx.world.time < ctx.progress.nextRespawn
   )
@@ -54,7 +61,12 @@ function spawnOne(ctx: Ctx): void {
   const pp = ctx.world.pos(ctx.player);
   for (let i = 0; i < 60; i++) {
     const a = ctx.world.rng() * Math.PI * 2;
-    const d = 380 + ctx.world.rng() * 180;
+    const d =
+      Math.max(
+        380,
+        Math.hypot(ctx.camera.w, ctx.camera.h) / (2 * ctx.camera.zoom) + 96,
+      ) +
+      ctx.world.rng() * 180;
     const x = pp.x + Math.cos(a) * d;
     const y = pp.y + Math.sin(a) * d;
     if (
@@ -77,6 +89,8 @@ function spawnOne(ctx: Ctx): void {
       worldSites(ctx).some(
         (s) =>
           ['camp', 'waypoint'].includes(s.definition.kind) &&
+          (!s.definition.guards ||
+            ctx.progress.purified.includes(s.definition.id)) &&
           Math.hypot(s.position.x - x, s.position.y - y) < 200,
       )
     )

@@ -1,16 +1,25 @@
+import { DUNGEONS } from './realm-data';
+import { FRONTIER_NODES, frontierPaths } from './expedition-design';
+import { segmentDistance } from './landscape-design';
 import { newRoad } from './landscape-design';
 /** 区域、地标、危险与奖励共用一张内容表，坐标单位为瓦片。 */
 import type { Vec2 } from '../engine/math';
 import type { ItemId } from './items';
 export const WORLD = {
-  width: 256,
-  height: 192,
+  width: 512,
+  height: 384,
   fogCell: 128,
   sight: 260,
   interact: 76,
   discover: 215,
 };
-export type RegionId = 'vale' | 'forest' | 'sanctum';
+export type RegionId =
+  | 'vale'
+  | 'forest'
+  | 'sanctum'
+  | 'marsh'
+  | 'highland'
+  | 'waste';
 export const REGIONS = {
   vale: {
     name: '灰烬谷',
@@ -36,19 +45,56 @@ export const REGIONS = {
     damage: 1.9,
     description: '神树庭院通向东方废墟，朝圣路与教堂内相对安全。',
   },
+  marsh: {
+    name: '黑水湿地',
+    levels: [10, 16],
+    color: '#7bbcb5',
+    hp: 2.6,
+    damage: 2.0,
+    description: '沿苇灯和栈道穿过岛地，夺回水寨可开通界石。',
+  },
+  highland: {
+    name: '断崖高地',
+    levels: [14, 20],
+    color: '#a9becb',
+    hp: 3.2,
+    damage: 2.35,
+    description: '石阶与隘口连接盆地，吊桥旁藏着回环近路。',
+  },
+  waste: {
+    name: '魔裂荒原',
+    levels: [18, 25],
+    color: '#d4a17f',
+    hp: 4,
+    damage: 2.7,
+    description: '黑曜裂谷围成战场，攻下前哨再深入裂隙之心。',
+  },
 } as const;
 export function regionAt(p: Vec2): RegionId {
   const x = p.x / 32,
     y = p.y / 32;
+  if (x >= 384) return 'waste';
+  if (x >= 256 && y < 224) return 'highland';
+  if (y >= 192) return 'marsh';
   if (x < 128 && y < 96)
     return x < 48 && y < 48 ? 'vale' : x >= 48 && y < 64 ? 'sanctum' : 'forest';
   if (x < 96 && y >= 96 && y < 160) return 'vale';
   return x >= 128 && y < 128 ? 'sanctum' : 'forest';
 }
 
-export type SiteKind = 'waypoint' | 'camp' | 'vista' | 'cache' | 'shrine';
+export type SiteKind =
+  | 'waypoint'
+  | 'camp'
+  | 'vista'
+  | 'cache'
+  | 'shrine'
+  | 'dungeon'
+  | 'exit'
+  | 'boss';
 export interface SiteDefinition {
   id: string;
+  zone?: 'mine' | 'roots' | 'jail';
+  destination?: 'mine' | 'roots' | 'jail';
   region: RegionId;
   name: string;
   kind: SiteKind;
@@ -59,6 +105,28 @@ export interface SiteDefinition {
   reward: { id: ItemId; count: number }[];
   description: string;
 }
+const FRONTIER_PATHS = frontierPaths();
+const ROAD_BUCKETS = new Map<string, [number[], number[]][]>();
+for (const path of FRONTIER_PATHS)
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1],
+      b = path[i];
+    for (
+      let y = Math.floor((Math.min(a[1], b[1]) - 3) / 32);
+      y <= Math.floor((Math.max(a[1], b[1]) + 3) / 32);
+      y++
+    )
+      for (
+        let x = Math.floor((Math.min(a[0], b[0]) - 3) / 32);
+        x <= Math.floor((Math.max(a[0], b[0]) + 3) / 32);
+        x++
+      ) {
+        const key = x + ':' + y,
+          bucket = ROAD_BUCKETS.get(key) || [];
+        bucket.push([a, b]);
+        ROAD_BUCKETS.set(key, bucket);
+      }
+  }
 const site = (
   id: string,
   region: RegionId,
@@ -483,12 +551,120 @@ SITES.push(
     '沿长阶与回廊找到藏匣，取出坤影篮球。',
   ),
 );
+// 三十处新区地点保留独立内容ID，界石中的守卫据点需清理后激活。
+for (const [id, region, name, kind, x, y, guards] of FRONTIER_NODES)
+  SITES.push(
+    site(
+      id,
+      region,
+      name,
+      kind,
+      x,
+      y,
+      guards,
+      kind === 'waypoint' || kind === 'camp' ? 0 : 45 + guards * 15,
+      kind === 'cache'
+        ? [
+            { id: 'health', count: 4 },
+            { id: 'mana', count: 4 },
+            { id: 'crystal', count: 6 },
+          ]
+        : [],
+      kind === 'waypoint' && guards
+        ? '夺回据点后激活界石，建立安全落脚点。'
+        : '沿主路与回环寻找此地，奖励只结算一次。',
+    ),
+  );
+for (const [id, name, region, x, y, destination] of [
+  ['vale-mine', '废弃矿洞', 'vale', 83, 132, 'mine'],
+  ['forest-roots', '腐根洞窟', 'forest', 141, 173, 'roots'],
+  ['sanctum-jail', '旧城地牢', 'sanctum', 183, 98, 'jail'],
+] as const)
+  SITES.push({
+    ...site(
+      id,
+      region,
+      name,
+      'dungeon',
+      x,
+      y,
+      0,
+      0,
+      [],
+      '进入独立地下城；探索、敌人与已领宝箱会保留。',
+    ),
+    destination,
+  });
+for (const [zone, region, name] of [
+  ['mine', 'vale', '矿井'],
+  ['roots', 'forest', '腐根'],
+  ['jail', 'sanctum', '地牢'],
+] as const) {
+  SITES.push({
+    ...site(
+      zone + '-exit',
+      region,
+      '返回地表',
+      'exit',
+      10,
+      12,
+      0,
+      0,
+      [],
+      '返回进入前的地表入口。',
+    ),
+    zone,
+  });
+  SITES.push({
+    ...site(
+      zone + '-cache',
+      region,
+      name + '侧室遗箱',
+      'cache',
+      22,
+      55,
+      2,
+      65,
+      [
+        { id: 'health', count: 4 },
+        { id: 'crystal', count: 5 },
+      ],
+      '探索岔路取得遗物。',
+    ),
+    zone,
+  });
+  SITES.push({
+    ...site(
+      zone + '-warden',
+      region,
+      name + '守卫核心',
+      'boss',
+      62,
+      60,
+      4,
+      160,
+      [
+        { id: 'mana', count: 5 },
+        { id: 'crystal', count: 12 },
+      ],
+      '清除核心守卫并领取奖励，回环门将开启。',
+    ),
+    zone,
+  });
+}
+export const SURFACE_SITES = SITES.filter((s) => !s.zone);
+export function sitesForZone(zone?: string): SiteDefinition[] {
+  return SITES.filter((s) => (s.zone || 'overworld') === (zone || 'overworld'));
+}
 export const SITE_NAMES: Record<SiteKind, string> = {
   waypoint: '界石',
   camp: '营地',
   vista: '眺望',
   cache: '遗箱',
   shrine: '净化',
+  dungeon: '地下城',
+  exit: '出口',
+  boss: '核心守卫',
 };
 export const SITE_SPRITES: Record<SiteKind, string> = {
   waypoint: 'landWaystone',
@@ -496,6 +672,9 @@ export const SITE_SPRITES: Record<SiteKind, string> = {
   vista: 'landVista',
   cache: 'landChest',
   shrine: 'landShrine',
+  dungeon: 'propDungeonPortal',
+  exit: 'propDungeonPortal',
+  boss: 'landShrine',
 };
 export function roadClearance(x: number, y: number): boolean {
   const xx = x / 32,
@@ -507,5 +686,17 @@ export function roadClearance(x: number, y: number): boolean {
       (Math.abs(yy - 76.5) < 1.9 && xx > 22) ||
       (Math.abs(xx - 110.5) < 1.9 && yy > 28) ||
       (Math.abs(yy - 30.5) < 1.9 && xx > 69));
-  return old || newRoad(xx, yy);
+  return (
+    old ||
+    (xx < 256 && yy < 192 && newRoad(xx, yy)) ||
+    (
+      ROAD_BUCKETS.get(Math.floor(xx / 32) + ':' + Math.floor(yy / 32)) || []
+    ).some(([a, b]) => segmentDistance(xx, yy, a, b) < 2.7)
+  );
+}
+
+export function regionForZone(zone: string | undefined, p: Vec2): RegionId {
+  return zone && zone !== 'overworld'
+    ? DUNGEONS[zone as keyof typeof DUNGEONS].region
+    : regionAt(p);
 }

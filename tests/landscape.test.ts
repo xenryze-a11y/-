@@ -18,8 +18,8 @@ import { Camera } from '../src/engine/camera';
 
 test('fourfold world adds traversable terraced ground with blocking cliffs and real stair openings', () => {
   const scene = buildScene(13, 'adventure');
-  assert.equal(scene.level.w * scene.level.h, 128 * 96 * 4);
-  assert.equal(worldSites(scene).length, 30);
+  assert.equal(scene.level.w * scene.level.h, 256 * 192 * 4);
+  assert.equal(worldSites(scene).length, 63);
   for (const hill of TERRACES) {
     const edgeY = hill.side === 'south' ? hill.y + hill.h - 1 : hill.y;
     assert.equal(scene.level.at(hill.x, edgeY), Tile.CLIFF);
@@ -36,7 +36,7 @@ test('fourfold world adds traversable terraced ground with blocking cliffs and r
       blockedTo = { x: blockedFrom.x, y: to.y };
     assert.equal(scene.level.lineClear(blockedFrom, blockedTo), false);
   }
-  assert.equal(SITES.filter((s) => s.kind === 'waypoint').length, 6);
+  assert.equal(SITES.filter((s) => s.kind === 'waypoint').length, 12);
 });
 
 test('blocker spatial lookup matches a brute-force collision reference across removal and restore', () => {
@@ -72,7 +72,7 @@ test('v2 exploration save expands without resetting IDs, claimed equipment, wayp
   const scene = restoreSave(record);
   assert.equal(scene.level.w, WORLD.width);
   assert.equal(scene.level.h, WORLD.height);
-  assert.equal(worldSites(scene).length, 30);
+  assert.equal(worldSites(scene).length, 63);
   assert.equal(scene.world.rng.getState(), record.data.world.rng);
   assert.equal(scene.world.time, record.data.world.time);
   assert.deepEqual(
@@ -88,7 +88,7 @@ test('v2 exploration save expands without resetting IDs, claimed equipment, wayp
     assert(scene.world.alive.has(e.id));
     if (e.position) assert.deepEqual(scene.world.pos(e.id), e.position);
   }
-  assert.equal(captureSave(scene).version, 3);
+  assert.equal(captureSave(scene).version, 4);
   const again = restoreSave(captureSave(scene));
   assert.equal(again.s.prop.length, scene.s.prop.length);
   assert.deepEqual(captureSave(again).data, captureSave(scene).data);

@@ -30,6 +30,11 @@ export class SanctuaryView {
     this.glow.clear();
   }
   sync(scene: Scene, dt: number): void {
+    const active = scene.progress.zone === 'overworld';
+    this.roof.visible = active;
+    this.floor.visible = active;
+    this.glow.visible = active;
+    if (!active) return;
     this.time += dt;
     const inside = inCathedral(scene.world.pos(scene.player));
     this.floor.visible = inside;
