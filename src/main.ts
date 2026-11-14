@@ -42,6 +42,8 @@ import { GROVE } from './game/mage-data';
 import type { MageSkillId } from './game/mage-data';
 import { updateSummons } from './game/systems/basketball';
 import { updateRules } from './game/systems/rules';
+import { updateSurvival } from './game/systems/survival';
+import { spawnDeathStash, takeDeathStash } from './game/death-stash';
 import type { Ctx } from './game/systems/context';
 
 async function boot(): Promise<void> {
@@ -170,6 +172,15 @@ async function boot(): Promise<void> {
     lastSaveError = '';
     lastSavedAt = '';
     if (ctx.s.inventory.get(ctx.player)!.cursor) ui.setInventory(true);
+    // 死亡掉落的遗物堆：回到同一局时在原位生成。
+    if (scene.progress.mode === 'adventure') {
+      const stash = takeDeathStash(scene.progress.seed);
+      if (stash) {
+        spawnDeathStash(ctx, stash);
+        view.sync(scene, 0);
+        ui.toast('你回到了倒下之地 · 遗物仍在原处');
+      }
+    }
   }
   function restart(grove = false): void {
     checkpoint();
@@ -399,6 +410,7 @@ async function boot(): Promise<void> {
         updateBlades(ctx, _fixed);
         updateSummons(ctx, _fixed);
         updateRules(ctx);
+        updateSurvival(ctx, _fixed);
         ctx.world.flush();
         ensureEquipmentInstances(ctx);
       });

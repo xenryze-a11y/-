@@ -11,6 +11,7 @@ import {
 import type { MageSkillId } from '../mage-data';
 import { selectedItem, notice } from '../inventory';
 import { applyDamage, meleeAttack } from './combat';
+import { survivalAttack } from './survival';
 import { igniteMob } from './staff-arts';
 import type { Ctx } from './context';
 export function bladeEvent(
@@ -48,7 +49,7 @@ export function attackBlade(ctx: Ctx, id: BladeId): void {
     at = ctx.world.pos(ctx.player),
     damage = def.damage * (id === 'greatsword' ? damageScale(ctx) : 1);
   meleeAttack(ctx, ctx.player, angle, def.arc, def.range, damage);
-  p.atkCd = def.cooldown;
+  p.atkCd = def.cooldown * survivalAttack(ctx);
   p.attackAnim = def.anim;
   p.swingAngle = angle;
   bladeEvent(

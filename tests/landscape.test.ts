@@ -88,7 +88,7 @@ test('v2 exploration save expands without resetting IDs, claimed equipment, wayp
     assert(scene.world.alive.has(e.id));
     if (e.position) assert.deepEqual(scene.world.pos(e.id), e.position);
   }
-  assert.equal(captureSave(scene).version, 3);
+  assert.equal(captureSave(scene).version, 5);
   const again = restoreSave(captureSave(scene));
   assert.equal(again.s.prop.length, scene.s.prop.length);
   assert.deepEqual(captureSave(again).data, captureSave(scene).data);

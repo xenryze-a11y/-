@@ -4,11 +4,14 @@
  */
 import { angleDiff, dist, fromAngle, type Vec2 } from '../../engine/math';
 import { CFG } from '../data';
+import { SURVIVAL } from '../data';
 import { BLADE_MAGIC } from '../weapon-data';
 import { armorReduction } from '../armor';
 import { grantXp } from './quests';
 import { SANCTUARY } from '../sanctuary-data';
 import { spawnDrop } from './loot';
+import { notice } from '../inventory';
+import { recordDeathStash } from '../death-stash';
 import { TAG, type Projectile } from '../components';
 import type { Ctx } from './context';
 
@@ -19,43 +22,47 @@ export function applyDamage(
   raw: number,
   from: number,
   knock?: Vec2,
+  /** 环境 / 状态持续伤害：跳过无敌帧、护甲、护盾与受击无敌。 */
+  pure = false,
 ): void {
   const h = ctx.s.health.get(target);
   if (!h || ctx.world.isPendingDeath(target)) return;
 
   const pl = ctx.s.player.get(target);
   const dodge = ctx.s.dodge.get(target);
-  if ((pl && pl.invuln > 0) || (dodge && dodge.invuln > 0)) return;
+  if (!pure) {
+    if ((pl && pl.invuln > 0) || (dodge && dodge.invuln > 0)) return;
 
-  if (pl) {
-    if ((ctx.s.blade.get(target)?.infernoLeft || 0) > 0)
-      raw *= 1 - BLADE_MAGIC.inferno.reduction;
-    raw = Math.max(1, raw - armorReduction(ctx.s.equip.get(target)));
-    if (pl.shield > 0 && pl.shieldHp > 0) {
-      const absorbed = Math.min(raw, pl.shieldHp);
-      pl.shieldHp -= absorbed;
-      raw -= absorbed;
-      const p = ctx.world.pos(target);
-      ctx.world.emit({
-        kind: 'ring',
-        x: p.x,
-        y: p.y,
-        amount: 29,
-        color: '#b5e9c5',
-        life: 0.25,
-      });
-      if (raw <= 0) return;
+    if (pl) {
+      if ((ctx.s.blade.get(target)?.infernoLeft || 0) > 0)
+        raw *= 1 - BLADE_MAGIC.inferno.reduction;
+      raw = Math.max(1, raw - armorReduction(ctx.s.equip.get(target)));
+      if (pl.shield > 0 && pl.shieldHp > 0) {
+        const absorbed = Math.min(raw, pl.shieldHp);
+        pl.shieldHp -= absorbed;
+        raw -= absorbed;
+        const p = ctx.world.pos(target);
+        ctx.world.emit({
+          kind: 'ring',
+          x: p.x,
+          y: p.y,
+          amount: 29,
+          color: '#b5e9c5',
+          life: 0.25,
+        });
+        if (raw <= 0) return;
+      }
+      pl.invuln = CFG.player.hurtInvuln;
     }
-    pl.invuln = CFG.player.hurtInvuln;
   }
-  const dmg = Math.max(1, Math.round(raw - h.armor * 0.35));
+  const dmg = pure ? raw : Math.max(1, Math.round(raw - h.armor * 0.35));
   h.hp -= dmg;
   const mob = ctx.s.mob.get(target);
   if (mob) mob.hurtFlash = 0.18;
   if (pl) pl.hurtFlash = 0.25;
   const p = { ...ctx.world.pos(target) };
   ctx.world.emit({
-    kind: target === ctx.player ? 'playerHurt' : 'hurt',
+    kind: target === ctx.player && !pure ? 'playerHurt' : 'hurt',
     entity: target,
     x: p.x,
     y: p.y,
@@ -70,10 +77,15 @@ export function applyDamage(
     ctx.world.setPos(target, next);
   }
 
-  if (h.hp > 0) return;
+  if (h.hp > 0) {
+    // 流血 / 感染只在真实受击时出现，环境持续伤害不算。
+    if (!pure && pl) applyAilment(ctx, from);
+    return;
+  }
   ctx.world.emit({ kind: 'kill', entity: target, x: p.x, y: p.y });
   if (target === ctx.player) {
     ctx.gameOver = true;
+    recordDeathStash(ctx);
     return;
   }
   ctx.world.destroy(target);
@@ -102,6 +114,27 @@ export function applyDamage(
     spawnDrop(ctx, p.x, p.y, ctx.world.rng() < 0.55 ? 'crystal' : 'herb');
     if (ctx.world.rng() < 0.22)
       spawnDrop(ctx, p.x, p.y, ctx.world.rng() < 0.5 ? 'mana' : 'health');
+    // 生存物资也走击杀掉落，避免「只能开局带」的死循环。
+    const supply = ctx.world.rng();
+    if (supply < 0.12) spawnDrop(ctx, p.x, p.y, 'rations');
+    else if (supply < 0.22) spawnDrop(ctx, p.x, p.y, 'water');
+    else if (supply < 0.28) spawnDrop(ctx, p.x, p.y, 'bandage');
+    // 毛皮斗篷是冬夜外出的关键装备，掉率压低。
+    else if (supply < 0.3) spawnDrop(ctx, p.x, p.y, 'fur_chest');
+  }
+}
+
+/** 受击概率获得流血 / 感染；已有时刷新时间而不是叠加层数。 */
+function applyAilment(ctx: Ctx, _from: number): void {
+  const sv = ctx.s.survival.get(ctx.player);
+  if (!sv) return;
+  const roll = ctx.world.rng();
+  if (roll < SURVIVAL.infectionChance) {
+    if (sv.infection <= 0) notice(ctx, '伤口感染 · 需要月露草');
+    sv.infection = Math.max(sv.infection, SURVIVAL.infectionLife);
+  } else if (roll < SURVIVAL.infectionChance + SURVIVAL.bleedChance) {
+    if (sv.bleed <= 0) notice(ctx, '伤口在流血 · 需要绷带');
+    sv.bleed = Math.max(sv.bleed, SURVIVAL.bleedLife);
   }
 }
 

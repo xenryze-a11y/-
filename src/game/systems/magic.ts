@@ -8,6 +8,7 @@ import { CFG } from '../data';
 import { ITEMS, SKILLS, MAGIC, isSkill, type SkillId } from '../items';
 import { notice, selectedItem, useSelected } from '../inventory';
 import { applyDamage, meleeAttack, spawnProjectile } from './combat';
+import { survivalAttack } from './survival';
 import type { Ctx } from './context';
 
 export function emitRing(
@@ -155,7 +156,7 @@ export function castSelected(ctx: Ctx, special = false): void {
   if (kind === 'potion' || kind === 'supply') {
     if (p.atkCd <= 0) {
       useSelected(ctx);
-      p.atkCd = 0.35;
+      p.atkCd = 0.35 * survivalAttack(ctx);
     }
     return;
   }
@@ -182,7 +183,7 @@ export function castSelected(ctx: Ctx, special = false): void {
       special ? CFG.sword.whirlDmg : CFG.sword.dmg,
     );
     if (special) p.castCd = CFG.sword.whirlCd;
-    else p.atkCd = CFG.sword.cd;
+    else p.atkCd = CFG.sword.cd * survivalAttack(ctx);
     p.attackAnim = special ? 0.3 : CFG.sword.animDur;
     p.swingAngle = angle;
     return;
@@ -202,7 +203,7 @@ export function castSelected(ctx: Ctx, special = false): void {
   p.mana -= cost;
   p.castAnim = CFG.staff.animDur;
   if (special) p.cooldowns[type] = skill.cd;
-  else p.atkCd = skill.baseCd;
+  else p.atkCd = skill.baseCd * survivalAttack(ctx);
   if (!special) {
     if (type === 'storm') chain(ctx, angle);
     else projectile(ctx, angle, type);

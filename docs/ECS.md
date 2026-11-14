@@ -69,6 +69,7 @@ app.ticker (真实 dt)
            updateBlades 魔镰风暴 / 邪阵破土 / 流焰弹道 / 连斩 / 炎躯
            updateSummons   篮球召唤追击 / 扫掠 / 引爆
            updateRules     拾取 / 补怪
+           updateSurvival  饱食 / 水分 / 体温 / 疲劳 / 创伤 / 负重
            world.flush()   统一删除
      └─ present.consume(world.drain())  // 事件每帧只 Drain 一次
   └─ camera.follow / present.update / view.sync / hud.update   // 表现，只读 World

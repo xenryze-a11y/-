@@ -15,7 +15,7 @@ import { initializeExploration } from './exploration-world';
 import { SANCTUARY, NPCS } from './sanctuary-data';
 import { GROVE } from './mage-data';
 import { spawnDrop } from './systems/loot';
-import { CFG } from './data';
+import { CFG, SURVIVAL } from './data';
 import {
   createProgress,
   ensureEquipmentInstances,
@@ -168,6 +168,17 @@ export function buildScene(
     barragePhase: 0,
     orbitTick: 0,
     orbitPhase: 0,
+  });
+  s.survival.set(player, {
+    hunger: SURVIVAL.max,
+    thirst: SURVIVAL.max,
+    warmth: SURVIVAL.max,
+    heat: 0,
+    fatigue: SURVIVAL.max,
+    bleed: 0,
+    infection: 0,
+    dot: 0,
+    warned: 0,
   });
 
   // 场景物件：静态贴图 + 圆形碰撞，注册进 Level 的 blockers。

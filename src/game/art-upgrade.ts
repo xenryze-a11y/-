@@ -369,6 +369,30 @@ export function upgradeSpecs(
             p.rect(x, 31, 14, 2, '#27352b');
             p.rect(x + 2, 12, 6, 2, light);
           }
+        } else if (item.kind === 'food') {
+          // 干粮：圆饼包，深底 + 中色 + 高光（像素画不用渐变）。
+          p.rect(8, 12, 24, 20, '#2b2419');
+          p.rect(9, 13, 22, 17, '#6b4f2c');
+          p.rect(11, 15, 18, 6, '#a9804c');
+          p.rect(11, 23, 18, 3, '#8a6538');
+          p.rect(13, 16, 5, 2, '#d9b47c');
+          p.rect(20, 17, 6, 1, '#7d5a32');
+        } else if (item.kind === 'drink') {
+          // 清水：软木塞 + 瓶身，用 item.color 当液面主色。
+          p.rect(16, 6, 8, 5, '#3a2f22');
+          p.rect(17, 7, 6, 3, '#a9804c');
+          p.rect(14, 11, 12, 22, '#20333a');
+          p.rect(15, 12, 10, 20, '#3c6b7d');
+          p.rect(16, 14, 8, 12, item.color);
+          p.rect(17, 15, 2, 9, '#d7ecf4');
+        } else if (item.kind === 'medical') {
+          // 绷带：侧放的卷 + 垂下的两条带子。
+          p.disc(20, 20, 12, '#2c2a22');
+          p.disc(20, 20, 10, '#e6ddc8');
+          p.disc(20, 20, 4, '#2c2a22');
+          p.disc(20, 20, 2, '#c9bfa6');
+          p.rect(6, 18, 28, 3, '#d8cdb4');
+          p.rect(6, 22, 28, 3, '#cfc3a9');
         }
       },
     });

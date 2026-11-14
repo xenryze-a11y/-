@@ -336,7 +336,7 @@ test('real stage-one save migrates to expanded world while preserving active inf
     if (entity.position)
       assert.deepEqual(loaded.world.pos(entity.id), entity.position);
   }
-  assert.equal(captureSave(loaded).version, 3);
+  assert.equal(captureSave(loaded).version, 5);
   assert.deepEqual(
     captureSave(restoreSave(captureSave(loaded))).data,
     captureSave(loaded).data,
@@ -355,7 +355,7 @@ test('real stage-one save migrates to expanded world while preserving active inf
     });
   assert.equal(repo.read(0).record!.version, 1);
   repo.write(0, captureSave(loaded));
-  assert.equal(repo.read(0).record!.version, 3);
+  assert.equal(repo.read(0).record!.version, 5);
 });
 
 test('distant monsters do not prevent local regional encounters from repopulating', () => {
