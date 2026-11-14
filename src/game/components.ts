@@ -51,6 +51,7 @@ export const C = {
   STAFF_SHOT: 'staffShot',
   METEOR: 'meteor',
   SUMMON: 'summon',
+  SURVIVAL: 'survival',
 } as const;
 
 export interface Radius {
@@ -223,6 +224,27 @@ export interface FallingMeteor {
   damage: number;
 }
 
+/**
+ * 生存状态，只挂在玩家身上。0–100 四条（越高越好），外加流血 / 感染倒计时。
+ * 数值全在 data.ts 的 SURVIVAL；衣物保暖与季节气温见 climate.ts。
+ * 负重是每帧从背包算出来的派生值，不存这里。
+ */
+export interface Survival {
+  hunger: number;
+  thirst: number;
+  /** 抗寒余量：环境温度低于衣物舒适下限时下降。 */
+  warmth: number;
+  /** 暑热：环境温度高于衣物舒适上限时上升。与抗寒分开，冷 / 热可分别归零。 */
+  heat: number;
+  fatigue: number;
+  bleed: number;
+  infection: number;
+  /** 归零掉血的周期计时。 */
+  dot: number;
+  /** 警告提示节流。 */
+  warned: number;
+}
+
 export interface SpellField {
   type: 'storm';
   r: number;
@@ -350,6 +372,7 @@ export interface Stores {
   staffZone: Store<StaffZone>;
   staffShot: Store<StaffShot>;
   meteor: Store<FallingMeteor>;
+  survival: Store<Survival>;
 }
 
 export function createStores(w: World): Stores {
@@ -379,5 +402,6 @@ export function createStores(w: World): Stores {
     staffZone: w.register<StaffZone>(C.STAFF_ZONE),
     staffShot: w.register<StaffShot>(C.STAFF_SHOT),
     meteor: w.register<FallingMeteor>(C.METEOR),
+    survival: w.register<Survival>(C.SURVIVAL),
   };
 }

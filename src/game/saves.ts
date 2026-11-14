@@ -3,13 +3,14 @@ import { World, type WorldSnapshot } from '../engine/ecs';
 import { Level, type LevelSnapshot } from '../engine/level';
 import { createStores, C, TAG } from './components';
 import { ITEMS } from './items';
+import { SURVIVAL } from './data';
 import { createProgress } from './adventure';
 import { initializeExploration } from './exploration-world';
 import { SITES, WORLD } from './world-data';
 import { ensureEquipmentInstances, type AdventureProgress } from './adventure';
 import type { Scene } from './spawn';
 
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 5;
 export const SAVE_LIMIT = 2_000_000;
 export const SAVE_PREFIX = 'ashen-vale.save.v1.';
 export interface SaveData {
@@ -97,7 +98,7 @@ const nums = (names: string): Record<string, Check> =>
 const vec = shape(nums('x y'));
 const ids = array(uint, 5000);
 const itemId = one(...Object.keys(ITEMS));
-const armorMat = one('none', 'leather', 'iron', 'sanctum');
+const armorMat = one('none', 'leather', 'iron', 'sanctum', 'fur');
 const element = one('ember', 'frost', 'storm', 'ward', 'blink');
 const cooldowns = shape(nums('field wave barrage'));
 const profession = shape({ unlocked: bool, cooldowns });
@@ -258,6 +259,11 @@ const schema: Record<string, Check> = {
     ...nums('owner vx vy life age radius damage'),
     hit: ids,
   }),
+  [C.SURVIVAL]: shape({
+    ...nums('hunger thirst warmth fatigue bleed infection dot warned'),
+    // v4 没有暑热；旧档在 restoreSave 里补 0。
+    heat: optional(number),
+  }),
 };
 
 function fail(message: string): never {
@@ -384,7 +390,12 @@ function validate(
     )
       fail('实体位置越界');
   }
-  if (Object.keys(d.world.stores).length !== Object.keys(schema).length)
+  // v4 加入生存组件。旧档不在这里补数据：validate 一旦改动 data，record 的校验码就会失效，
+  // 而 restoreSave 会再 parse 一次。缺省值交给 restoreSave 在新世界上补。
+  if (
+    Object.keys(d.world.stores).length !==
+    Object.keys(schema).length - (version < 4 ? 1 : 0)
+  )
     fail('组件版本不匹配');
   for (const [name, entries] of Object.entries(d.world.stores)) {
     const check = schema[name];
@@ -413,6 +424,7 @@ function validate(
     C.JOURNAL,
     C.MAGE,
     C.BLADE,
+    ...(version >= 4 ? [C.SURVIVAL] : []),
   ])
     if (!value(name)) fail('缺失角色组件');
   if (
@@ -439,6 +451,14 @@ function validate(
     p.mana > p.maxMana
   )
     fail('角色生命或法力无效');
+  const sv = s.survival.get(d.player);
+  if (
+    sv &&
+    [sv.hunger, sv.thirst, sv.warmth, sv.heat, sv.fatigue].some(
+      (v) => v < 0 || v > SURVIVAL.max,
+    )
+  )
+    fail('生存状态无效');
   const blade = s.blade.get(d.player)!;
   if (blade.infernoVitality !== blade.infernoLeft > 0)
     fail('火焰护体状态不一致');
@@ -566,13 +586,15 @@ export function parseSave(raw: string): SaveRecord {
   if (
     record.version !== 1 &&
     record.version !== 2 &&
+    record.version !== 3 &&
+    record.version !== 4 &&
     record.version !== SAVE_VERSION
   )
     fail('存档版本不兼容，请使用对应版本的游戏');
   if (
     !shape({
       format: one('ashen-vale'),
-      version: one(1, 2, SAVE_VERSION),
+      version: one(1, 2, 3, 4, SAVE_VERSION),
       savedAt: text,
       checksum: text,
       data: object,
@@ -610,6 +632,22 @@ export function restoreSave(record: SaveRecord): Scene {
         : structuredClone(data.progress),
   };
   initializeExploration(scene);
+  // v1–v3 没有生存组件：在新世界上补满值，避免玩家一读档就挨饿。
+  if (!s.survival.has(data.player))
+    s.survival.set(data.player, {
+      hunger: SURVIVAL.max,
+      thirst: SURVIVAL.max,
+      warmth: SURVIVAL.max,
+      heat: 0,
+      fatigue: SURVIVAL.max,
+      bleed: 0,
+      infection: 0,
+      dot: 0,
+      warned: 0,
+    });
+  // v4 没有暑热字段：补 0，避免老存档一读档就中暑。
+  const sv = s.survival.get(data.player)!;
+  if (typeof sv.heat !== 'number') sv.heat = 0;
   return scene;
 }
 

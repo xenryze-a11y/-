@@ -2,10 +2,11 @@
 import { BTN, type InputState } from '../../engine/input';
 import { angle, len, norm, fromAngle } from '../../engine/math';
 import { CFG } from '../data';
-import { useSelected } from '../inventory';
+import { useSelected, notice } from '../inventory';
 import { dropSelected } from './loot';
 import { castStaffAbility, selectedProfession } from './profession';
 import { castSelected } from './magic';
+import { survivalDodge, survivalSpeed } from './survival';
 import type { Ctx } from './context';
 
 export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
@@ -39,8 +40,13 @@ export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
     return;
   }
   if (input.pressed & BTN.DODGE && d.cd <= 0) {
+    const scale = survivalDodge(ctx);
+    if (scale <= 0) {
+      notice(ctx, '疲惫或超载 · 翻不动身');
+      return;
+    }
     d.dir = len(input.move) > 0.1 ? norm(input.move) : fromAngle(f.angle);
-    d.time = CFG.dodge.dur;
+    d.time = CFG.dodge.dur * scale;
     d.cd = CFG.dodge.cd;
     d.invuln = CFG.dodge.invuln;
     ctx.world.emit({ kind: 'dodge', x: pos.x, y: pos.y, angle: angle(d.dir) });
@@ -49,7 +55,8 @@ export function applyInput(ctx: Ctx, input: InputState, dt: number): void {
   // 向量已经携带摇杆推力，不能再乘一次长度，否则半推会变为四分之一速度。
   const speed =
     CFG.player.speed *
-    (p.castAnim > 0 || p.attackAnim > 0 ? CFG.player.castSlow : 1);
+    (p.castAnim > 0 || p.attackAnim > 0 ? CFG.player.castSlow : 1) *
+    survivalSpeed(ctx);
   ctx.world.setPos(
     ctx.player,
     ctx.level.move(

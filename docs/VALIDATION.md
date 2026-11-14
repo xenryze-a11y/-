@@ -8,6 +8,7 @@ npm run typecheck
 npm test
 npm run build
 npm run export:standalone
+npm run shot -- field        # 无头出图（可选，出 PNG 到 docs/shots/）
 ```
 
 类型检查、34 项无浏览器回归、常规构建、单文件构建均通过。「直接可以玩的 .HTML」与 `dist-standalone/index.html` 逐字节相同，由导出脚本复制，无手工产物补丁。lockfile 只把 registry.npmmirror.com 下载地址替换为官方 registry.npmjs.org，版本与 integrity 哈希保持不变。
@@ -161,3 +162,21 @@ Chromium / Playwright 在生产预览实际检查：
 - 最终独立断网单文件能解码新圣域图，真实施放7秒炎躯与5波；ready=true、生命上限240、波数5，HTTP(S)请求0、页面异常0。
 
 新 / 更新实机截图：sacred-tree.png、sanctum-plaza.png、cathedral-exterior.png（调试全景）、cathedral-interior.png、flame-inferno.png、flame-five-waves.png、inferno-mobile.png。新原稿和处理规范见assets/README.md，取舍见D39–D41。
+
+
+## 无头出图工具与三件透明图标修复
+
+新增 `tests/render/`（canvas-shim + png + shot）与 `npm run shot` 脚本，在无浏览器的 Node 里重建完整运行时图集（398 帧）并导出 PNG，供视觉模型读图核对。
+
+类型检查、134 项模拟回归（含 14 项 shim / PNG 断言）、普通构建、单文件构建与导出通过。
+
+- shim 行为已锁：`fillRect` 的 floor 语义、预乘 alpha、`source-atop` / `destination-out`、裁剪、
+  `drawImage` 三种重载、PNG 编码 → ShimImage 解码像素一致；未实现的 API 抛错而非静默出错图。
+- 集成断言逐帧校验图集：无越界、无全透明帧。
+- **抓到并修复真 bug**：`item_rations` / `item_water` / `item_bandage` 在 `art-upgrade.ts`
+  没有对应绘制分支，三种物品图标在游戏里完全不可见。现已补 food / drink / medical 分支，
+  并由「全透明帧」断言防止回归。
+- 出图已目视核对：`docs/shots/atlas.png`（整张图集）、`field.png`（多类地形选帧与描边）、
+  `hero.png`（blockPose 骨架 + 法杖）、`items.png`（全部物品图标）。
+
+详见 [RENDERING.md](RENDERING.md)。

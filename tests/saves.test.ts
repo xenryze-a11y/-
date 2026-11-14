@@ -98,7 +98,7 @@ test('adventure starts with basic gear while full weapon trials retain their inv
   const inv = scene.s.inventory.get(scene.player)!;
   assert.deepEqual(
     inv.slots.filter(Boolean).map((i) => i!.id),
-    ['sword', 'ember', 'health', 'mana', 'wood', 'herb'],
+    ['sword', 'ember', 'health', 'mana', 'wood', 'herb', 'rations', 'water', 'bandage'],
   );
   assert.equal(scene.s.player.get(scene.player)!.weapon, 'sword');
   assert.equal(scene.progress.name, '星火');

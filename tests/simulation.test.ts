@@ -1,7 +1,10 @@
+import './render.test';
 import { test } from 'node:test';
 import './saves.test';
 import './exploration.test';
 import './landscape.test';
+import './survival.test';
+import './climate.test';
 import {
   castMage,
   updateMage,

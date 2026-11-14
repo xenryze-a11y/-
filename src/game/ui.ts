@@ -1,7 +1,7 @@
 /** DOM 是表现层：读取 ECS 快照，发输入/背包命令，从不直接改组件。 */
 import { newLimbPose } from '../engine/animation';
 import { blockPose } from './block-rig';
-import { armorReduction, fullSet } from './armor';
+import { armorReduction, clothingCooling, clothingInsulation, fullSet } from './armor';
 import { NPCS, inCathedral } from './sanctuary-data';
 import {
   nearbyNpc,
@@ -32,10 +32,19 @@ import { ITEMS, ABILITIES, isAbility, type ItemId } from './items';
 import {
   getSlot,
   recipe,
+  carriedWeight,
   type InventoryState,
   type ItemStack,
   type InventoryCommand,
 } from './inventory';
+import { SURVIVAL } from './data';
+import { loadTierFor } from './systems/survival';
+import {
+  ambientAt,
+  comfortRange,
+  SEASONS,
+  seasonAt,
+} from './climate';
 import type { Ctx } from './systems/context';
 import { UI_TEMPLATE } from './ui-template';
 import { bindLandscapeButtons } from './mobile-display';
@@ -449,7 +458,7 @@ export class GameUI {
       .join('');
     const eq = this.context().s.equip.get(this.context().player)!;
     this.q('#av-gear-stats').textContent =
-      `减伤 ${armorReduction(eq)} · ${fullSet(eq) === 'sanctum' ? '晨曦套装\n法力 +2/秒' : fullSet(eq) ? '完整套装' : '可混搭装备'}`;
+      `减伤 ${armorReduction(eq)} · 保暖 ${clothingInsulation(eq)} · 耐热 ${clothingCooling(eq)} · ${fullSet(eq) === 'sanctum' ? '晨曦套装\n法力 +2/秒' : fullSet(eq) ? '完整套装' : '可混搭装备'}`;
     this.q('#av-boot-name').textContent = inv.boots
       ? ITEMS[inv.boots.id].name
       : '未装备靴子';
@@ -840,9 +849,52 @@ export class GameUI {
     this.q('#av-health-fill').style.width =
       100 * Math.max(0, hp.hp / hp.max) + '%';
     this.q('#av-mana-fill').style.width = (100 * p.mana) / p.maxMana + '%';
+    const sv = ctx.s.survival.get(ctx.player);
+    if (sv) {
+      this.q('#av-hunger-fill').style.width = sv.hunger + '%';
+      this.q('#av-thirst-fill').style.width = sv.thirst + '%';
+      this.q('#av-warmth-fill').style.width = sv.warmth + '%';
+      this.q('#av-fatigue-fill').style.width = sv.fatigue + '%';
+      this.q('#av-heat-fill').style.width = sv.heat + '%';
+      this.q('[data-stat="heat"]').classList.toggle(
+        'low',
+        sv.heat >= SURVIVAL.heatSlow,
+      );
+      this.q('[data-stat="hunger"]').classList.toggle(
+        'low',
+        sv.hunger <= SURVIVAL.hungerSlow,
+      );
+      this.q('[data-stat="thirst"]').classList.toggle(
+        'low',
+        sv.thirst <= SURVIVAL.thirstSlow,
+      );
+      this.q('[data-stat="warmth"]').classList.toggle(
+        'low',
+        sv.warmth <= SURVIVAL.coldSlow,
+      );
+      this.q('[data-stat="fatigue"]').classList.toggle(
+        'low',
+        sv.fatigue <= SURVIVAL.exhaustionSlow,
+      );
+      const ailments = [
+        sv.bleed > 0 ? '流血' : '',
+        sv.infection > 0 ? '感染' : '',
+        loadTierFor(ctx) === 'maxed' ? '超载' : '',
+      ].filter(Boolean);
+      this.q('#av-ailments').textContent = ailments.join(' · ');
+    }
+    const ambient = ambientAt(ctx),
+      comfort = comfortRange(ctx),
+      season = seasonAt(ctx.world.time),
+      climate = this.q('#av-climate');
+    climate.textContent =
+      `${SEASONS[season].name} · 气温 ${ambient.toFixed(0)}° · 舒适 ${comfort.min.toFixed(0)}~${comfort.max.toFixed(0)}°`;
+    climate.classList.toggle('cold', ambient < comfort.min);
+    climate.classList.toggle('hot', ambient > comfort.max);
     const inferno = ctx.s.blade.get(ctx.player)!.infernoLeft;
+    const inv = this.inventory;
     this.q('#av-kills').textContent =
-      `击败 ${p.kills}  ·  ${inferno > 0 ? '炎躯 ' + inferno.toFixed(1) + '秒' : p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
+      `击败 ${p.kills}  ·  负重 ${carriedWeight(inv).toFixed(1)}  ·  ${inferno > 0 ? '炎躯 ' + inferno.toFixed(1) + '秒' : p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
     this.q('#av-level').textContent = String(
       ctx.s.journal.get(ctx.player)!.level,
     ).padStart(2, '0');
@@ -861,7 +913,11 @@ export class GameUI {
           (p.castCd > 0 ? p.castCd.toFixed(1) + ' 秒后就绪' : '已就绪')
         : item?.kind === 'potion' || item?.kind === 'supply'
           ? '左键 / X · 使用当前物品'
-          : 'E · 背包与合成';
+          : item?.kind === 'food' ||
+              item?.kind === 'drink' ||
+              item?.kind === 'medical'
+            ? 'X · 使用当前物品'
+            : 'E · 背包与合成';
     this.toastTime = Math.max(0, this.toastTime - dt);
     this.q('#av-toast').classList.toggle('show', this.toastTime > 0);
     if (
