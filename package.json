@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "test": "node scripts/test.mjs",
+    "shot": "node tests/render/run-shot.mjs",
     "export:standalone": "npm run build:standalone && node scripts/export-standalone.mjs"
   },
   "dependencies": {

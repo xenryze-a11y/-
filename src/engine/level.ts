@@ -58,6 +58,12 @@ export class Level {
   private readonly blockerCells = new Map<string, Set<Blocker>>();
   private readonly blockerCellSize = 128;
   revision = 0;
+  /** 只标记瓦片外观改变；碰撞物增减不应重烘焙地面。 */
+  terrainRevision = 0;
+  markTerrainChanged(): void {
+    this.revision++;
+    this.terrainRevision++;
+  }
 
   constructor(
     readonly w: number,

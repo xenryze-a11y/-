@@ -260,6 +260,76 @@ export function applyCartoonSceneArt(atlas: BuiltAtlas): void {
         p.rect(x, y + h - 2, w, 2, '#90a493');
       }
     });
+  for (const [name, base, light, dark] of [
+    ['Marsh', '#628e7e', '#8ab39a', '#426d68'],
+    ['Highland', '#94a58a', '#bfcc9e', '#758b80'],
+    ['Waste', '#ad8564', '#d0aa75', '#8b6557'],
+    ['DungeonMine', '#7b725f', '#aa9874', '#5a574c'],
+    ['DungeonRoots', '#5b7063', '#81997c', '#405950'],
+    ['DungeonJail', '#768581', '#a2b3a0', '#526862'],
+    ['DungeonVoid', '#253d3c', '#354f4a', '#1b302f'],
+  ])
+    draw('terrain' + name, (p) => {
+      p.rect(0, 0, 128, 128, base);
+      for (let i = 0; i < 12; i++) {
+        const x = 7 + ((i * 41) % 112),
+          y = 7 + ((i * 29) % 112);
+        p.rect(x, y, 8 + (i % 5), 2, light);
+        if (i % 3 === 0) p.line(x + 3, y + 4, x + 7, y + 8, dark, 2);
+      }
+      if (name.startsWith('Dungeon') && name !== 'DungeonVoid')
+        for (let y = 0; y < 128; y += 32) {
+          p.rect(0, y, 128, 2, dark);
+          for (let x = y % 64 ? 16 : 0; x < 128; x += 32)
+            p.rect(x, y, 2, 32, dark);
+        }
+    });
+  draw('terrainBoardwalk', (p) => {
+    p.rect(0, 0, 128, 128, '#725a43');
+    for (let y = 0; y < 128; y += 8) {
+      p.rect(0, y + 1, 128, 6, '#b2996b');
+      p.rect(0, y + 1, 128, 2, '#d3bd83');
+      for (let x = 8; x < 128; x += 32) p.rect(x, y + 3, 2, 2, '#5b5544');
+    }
+  });
+  draw('propDungeonPortal', (p) => {
+    for (const x of [11, 65]) {
+      slab(p, x, 33, 20, 70);
+      slab(p, x - 4, 99, 28, 10);
+    }
+    slab(p, 17, 22, 62, 17);
+    slab(p, 26, 11, 44, 15);
+    slab(p, 37, 4, 22, 12);
+    polygon(
+      p,
+      [
+        [34, 43],
+        [61, 43],
+        [61, 98],
+        [34, 98],
+      ],
+      '#182f37',
+    );
+    polygon(
+      p,
+      [
+        [41, 46],
+        [54, 46],
+        [60, 72],
+        [53, 96],
+        [40, 96],
+        [35, 72],
+      ],
+      '#376579',
+    );
+    p.line(48, 44, 43, 66, '#8edaca', 3);
+    p.line(43, 66, 52, 77, '#8edaca', 3);
+    p.line(52, 77, 45, 97, '#8edaca', 3);
+    for (const x of [20, 74]) {
+      p.rect(x, 43, 3, 14, '#e6ba6d');
+      p.rect(x - 2, 40, 7, 5, '#ffdfa0');
+    }
+  });
   draw('tileCliffRaised', (p) => {
     p.rect(0, 0, 32, 64, '#435e60');
     p.rect(2, 6, 28, 54, '#879a8d');

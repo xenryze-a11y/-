@@ -237,3 +237,7 @@ sanctum-ground.ts只选择显示材质，避开旧城镇、水和墙，保留碰
 ## 卡通材质与保护帧
 
 当前普通场景由 `cartoon-scene-art.ts` 在生成素材之后以大色块、硬边和三档明暗覆写，教堂、祭坛、神树及基座保留。只在启动/分块烘焙时画入原图集；教堂墙与城镇卡通墙分开选帧。详见 [卡通场景](CARTOON_SCENE.md)。
+
+## 六域与地下城材质
+
+新增terrainMarsh/Highland/Waste/Boardwalk与terrainDungeonMine/Roots/Jail/Void、propDungeonPortal，继续由cartoon-scene-art.ts启动合入同一图集。地下城禁用地表教堂/根床/庭院覆盖，使用同一墙体脚底排序；山体仅边缘创建抬高墙Sprite。地形瓦片改变要调用Level.markTerrainChanged，碰撞物改变只更新revision，避免无意义地面重烘焙。

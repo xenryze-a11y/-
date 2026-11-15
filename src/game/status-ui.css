@@ -1,0 +1,62 @@
+/* 状态与任务依内容排布，新增生存细条时不再撞上固定 top 的任务框。 */
+#av-status-stack {
+  position: absolute;
+  top: 24px;
+  left: 26px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  pointer-events: none;
+}
+#av-status-stack .av-vitals,
+#av-status-stack #av-quest-tracker {
+  position: static;
+  margin: 0;
+}
+#av-ailments:empty {
+  display: none;
+}
+@media (max-width: 800px) {
+  #av-status-stack {
+    top: 13px;
+    left: 14px;
+  }
+}
+@media (max-height: 580px) and (min-width: 651px) {
+  #av-status-stack {
+    top: 10px;
+    flex-direction: row;
+    gap: 12px;
+  }
+  #av-status-stack .av-vitals {
+    width: 170px;
+    padding: 7px 10px;
+  }
+  #av-status-stack .av-vitals .eyebrow { font-size: 9px; letter-spacing: .08em; }
+  #av-status-stack .av-vitals .eyebrow span:first-child { white-space: nowrap; }
+  #av-status-stack .av-survival {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 8px;
+    margin-top: 4px;
+    padding-top: 4px;
+  }
+  #av-status-stack .av-survival-row {
+    margin: 0;
+    gap: 4px;
+  }
+  #av-status-stack .av-survival-row > span {
+    width: 24px;
+    font-size: 9px;
+  }
+  #av-status-stack #av-climate,
+  #av-status-stack #av-ailments {
+    grid-column: 1 / -1;
+    font-size: 8px;
+  }
+  #av-status-stack #av-kills {
+    font-size: 8px;
+    margin-top: 4px;
+  }
+}

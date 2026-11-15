@@ -1,7 +1,7 @@
 /** DOM 是表现层：读取 ECS 快照，发输入/背包命令，从不直接改组件。 */
 import { newLimbPose } from '../engine/animation';
 import { blockPose } from './block-rig';
-import { armorReduction, fullSet } from './armor';
+import { armorReduction, clothingCooling, clothingInsulation, fullSet } from './armor';
 import { NPCS, inCathedral } from './sanctuary-data';
 import {
   nearbyNpc,
@@ -32,18 +32,30 @@ import { ITEMS, ABILITIES, isAbility, type ItemId } from './items';
 import {
   getSlot,
   recipe,
+  carriedWeight,
   type InventoryState,
   type ItemStack,
   type InventoryCommand,
 } from './inventory';
+import { SURVIVAL } from './data';
+import { loadTierFor } from './systems/survival';
+import {
+  ambientAt,
+  comfortRange,
+  SEASONS,
+  seasonAt,
+} from './climate';
 import type { Ctx } from './systems/context';
 import { UI_TEMPLATE } from './ui-template';
+import { DUNGEONS } from './realm-data';
+import { bindMobileStick } from './mobile-stick';
 import { bindLandscapeButtons } from './mobile-display';
 import { SaveMenu, type SaveActions } from './save-menu';
 import './ui.css';
 import './mage-ui.css';
 import './sanctuary-ui.css';
 import './save-ui.css';
+import './status-ui.css';
 
 export interface UIActions {
   command(command: InventoryCommand): void;
@@ -53,6 +65,8 @@ export interface UIActions {
   interact(): void;
   graphics(): string;
   graphicsLabel(): string;
+  view(): string;
+  viewLabel(): string;
   explore(command: ExplorationCommand): void;
   saves: SaveActions;
   checkpoint(): void;
@@ -65,6 +79,7 @@ export class GameUI {
   menuOpen = true;
   inventoryOpen = false;
   touch = matchMedia('(pointer:coarse)').matches;
+  private releaseStick: () => void = () => {};
   private helpOpen = false;
   private split = false;
   private quick = false;
@@ -94,6 +109,7 @@ export class GameUI {
     bindLandscapeButtons(this.element, (message) => this.toast(message));
     this.setTouch(this.touch);
     this.q('#av-quality-button').textContent = actions.graphicsLabel();
+    this.q('#av-view-button').textContent = actions.viewLabel();
     this.renderInventory();
     this.setMenu(true);
   }
@@ -287,7 +303,15 @@ export class GameUI {
     this.q('#av-exploration-objective').textContent = tracked
       ? `◇ ${tracked.definition.name} · ${Math.round(Math.hypot(tracked.position.x - at.x, tracked.position.y - at.y) / 16)} 米 · ${tracked.position.x > at.x + 32 ? '东' : tracked.position.x < at.x - 32 ? '西' : ''}${tracked.position.y > at.y + 32 ? '南' : tracked.position.y < at.y - 32 ? '北' : ''} · M 地图`
       : 'M 地图 · 沿道路发现新地点';
-    this.q('#av-quest-objective').textContent = questObjective(ctx);
+    const underground = ctx.progress.zone !== 'overworld';
+    this.q('#av-quest-tracker > b').textContent = underground
+      ? DUNGEONS[ctx.progress.zone as keyof typeof DUNGEONS].name
+      : '神树的守望';
+    this.q('#av-quest-objective').textContent = underground
+      ? ctx.progress.bosses.includes(ctx.progress.zone + '-warden')
+        ? '核心已清除，回环近路已开启；可继续搜寻侧室遗箱。'
+        : '探索岔路，清除核心守卫；入口可返回地表。'
+      : questObjective(ctx);
     this.q('#av-xp').textContent =
       `等级 ${j.level} · ${j.xp} / ${levelRequirement(j.level)} 经验`;
     if (def) {
@@ -338,6 +362,7 @@ export class GameUI {
         this.toast(ev.text);
   }
   setInventory(open: boolean): void {
+    if (open) this.releaseStick();
     this.inventoryOpen = open;
     this.input.reset();
     this.element.classList.toggle('inventory-open', open);
@@ -349,6 +374,7 @@ export class GameUI {
     else this.q<HTMLButtonElement>('#av-bag-button').blur();
   }
   setWorldMap(open: boolean): void {
+    if (open) this.releaseStick();
     if (
       !this.running ||
       this.context().gameOver ||
@@ -365,7 +391,10 @@ export class GameUI {
     } else this.worldMap.close();
   }
   setMenu(open: boolean): void {
-    if (open) this.worldMap.close();
+    if (open) {
+      this.worldMap.close();
+      this.releaseStick();
+    }
     this.menuOpen = open;
     this.input.reset();
     this.q('#av-menu2').hidden = !open;
@@ -392,11 +421,13 @@ export class GameUI {
     this.toast('C 与圣使交谈 · 向南探索教堂 · E 四部位换装');
   }
   private setHelp(open: boolean): void {
+    if (open) this.releaseStick();
     this.helpOpen = open;
     this.q('#av-help').hidden = !open;
     this.input.reset();
   }
   private setTouch(touch: boolean): void {
+    this.releaseStick();
     this.touch = touch;
     this.element.classList.toggle('touch-mode', touch);
     this.q('#av-touch-button').textContent = '触控：' + (touch ? '开' : '关');
@@ -449,7 +480,7 @@ export class GameUI {
       .join('');
     const eq = this.context().s.equip.get(this.context().player)!;
     this.q('#av-gear-stats').textContent =
-      `减伤 ${armorReduction(eq)} · ${fullSet(eq) === 'sanctum' ? '晨曦套装\n法力 +2/秒' : fullSet(eq) ? '完整套装' : '可混搭装备'}`;
+      `减伤 ${armorReduction(eq)} · 保暖 ${clothingInsulation(eq)} · 耐热 ${clothingCooling(eq)} · ${fullSet(eq) === 'sanctum' ? '晨曦套装\n法力 +2/秒' : fullSet(eq) ? '完整套装' : '可混搭装备'}`;
     this.q('#av-boot-name').textContent = inv.boots
       ? ITEMS[inv.boots.id].name
       : '未装备靴子';
@@ -567,6 +598,9 @@ export class GameUI {
     this.q('#av-recipes').onclick = () => this.setHelp(true);
     this.q('#av-close-help').onclick = () => this.setHelp(false);
     this.q('#av-touch-button').onclick = () => this.setTouch(!this.touch);
+    this.q('#av-view-button').onclick = () => {
+      this.q('#av-view-button').textContent = this.actions.view();
+    };
     this.q('#av-quality-button').onclick = () => {
       this.q('#av-quality-button').textContent = this.actions.graphics();
     };
@@ -751,39 +785,11 @@ export class GameUI {
     }
   }
   private touchEvents(): void {
-    const stick = this.q('#av-stick2'),
-      knob = this.q('#av-stick-knob');
-    let pointer: number | null = null;
-    const move = (e: PointerEvent): void => {
-      const r = stick.getBoundingClientRect(),
-        radius = r.width * 0.34;
-      let x = e.clientX - r.left - r.width / 2,
-        y = e.clientY - r.top - r.height / 2;
-      const length = Math.hypot(x, y);
-      if (length > radius) {
-        x = (x / length) * radius;
-        y = (y / length) * radius;
-      }
-      knob.style.transform = `translate(calc(-50% + ${x}px),calc(-50% + ${y}px))`;
-      this.input.setTouchAxis(x / radius, y / radius);
-    };
-    stick.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      pointer = e.pointerId;
-      stick.setPointerCapture(pointer);
-      move(e);
-    });
-    stick.addEventListener('pointermove', (e) => {
-      if (pointer === e.pointerId) move(e);
-    });
-    for (const kind of ['pointerup', 'pointercancel', 'lostpointercapture'])
-      stick.addEventListener(kind, (e) => {
-        if (pointer === (e as PointerEvent).pointerId) {
-          pointer = null;
-          knob.style.transform = 'translate(-50%,-50%)';
-          this.input.setTouchAxis(0, 0);
-        }
-      });
+    this.releaseStick = bindMobileStick(
+      this.element,
+      this.input,
+      () => this.touch && !this.paused,
+    );
     for (const button of this.element.querySelectorAll<HTMLButtonElement>(
       '[data-mage]',
     )) {
@@ -840,9 +846,52 @@ export class GameUI {
     this.q('#av-health-fill').style.width =
       100 * Math.max(0, hp.hp / hp.max) + '%';
     this.q('#av-mana-fill').style.width = (100 * p.mana) / p.maxMana + '%';
+    const sv = ctx.s.survival.get(ctx.player);
+    if (sv) {
+      this.q('#av-hunger-fill').style.width = sv.hunger + '%';
+      this.q('#av-thirst-fill').style.width = sv.thirst + '%';
+      this.q('#av-warmth-fill').style.width = sv.warmth + '%';
+      this.q('#av-fatigue-fill').style.width = sv.fatigue + '%';
+      this.q('#av-heat-fill').style.width = sv.heat + '%';
+      this.q('[data-stat="heat"]').classList.toggle(
+        'low',
+        sv.heat >= SURVIVAL.heatSlow,
+      );
+      this.q('[data-stat="hunger"]').classList.toggle(
+        'low',
+        sv.hunger <= SURVIVAL.hungerSlow,
+      );
+      this.q('[data-stat="thirst"]').classList.toggle(
+        'low',
+        sv.thirst <= SURVIVAL.thirstSlow,
+      );
+      this.q('[data-stat="warmth"]').classList.toggle(
+        'low',
+        sv.warmth <= SURVIVAL.coldSlow,
+      );
+      this.q('[data-stat="fatigue"]').classList.toggle(
+        'low',
+        sv.fatigue <= SURVIVAL.exhaustionSlow,
+      );
+      const ailments = [
+        sv.bleed > 0 ? '流血' : '',
+        sv.infection > 0 ? '感染' : '',
+        loadTierFor(ctx) === 'maxed' ? '超载' : '',
+      ].filter(Boolean);
+      this.q('#av-ailments').textContent = ailments.join(' · ');
+    }
+    const ambient = ambientAt(ctx),
+      comfort = comfortRange(ctx),
+      season = seasonAt(ctx.world.time),
+      climate = this.q('#av-climate');
+    climate.textContent =
+      `${SEASONS[season].name} · 气温 ${ambient.toFixed(0)}° · 舒适 ${comfort.min.toFixed(0)}~${comfort.max.toFixed(0)}°`;
+    climate.classList.toggle('cold', ambient < comfort.min);
+    climate.classList.toggle('hot', ambient > comfort.max);
     const inferno = ctx.s.blade.get(ctx.player)!.infernoLeft;
+    const inv = this.inventory;
     this.q('#av-kills').textContent =
-      `击败 ${p.kills}  ·  ${inferno > 0 ? '炎躯 ' + inferno.toFixed(1) + '秒' : p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
+      `击败 ${p.kills}  ·  负重 ${carriedWeight(inv).toFixed(1)}  ·  ${inferno > 0 ? '炎躯 ' + inferno.toFixed(1) + '秒' : p.shield > 0 ? '护盾 ' + Math.ceil(p.shieldHp) + ' / ' + p.shield.toFixed(1) + '秒' : '存活 ' + Math.floor(ctx.world.time / 60) + ':' + String(Math.floor(ctx.world.time % 60)).padStart(2, '0')}`;
     this.q('#av-level').textContent = String(
       ctx.s.journal.get(ctx.player)!.level,
     ).padStart(2, '0');
@@ -861,7 +910,11 @@ export class GameUI {
           (p.castCd > 0 ? p.castCd.toFixed(1) + ' 秒后就绪' : '已就绪')
         : item?.kind === 'potion' || item?.kind === 'supply'
           ? '左键 / X · 使用当前物品'
-          : 'E · 背包与合成';
+          : item?.kind === 'food' ||
+              item?.kind === 'drink' ||
+              item?.kind === 'medical'
+            ? 'X · 使用当前物品'
+            : 'E · 背包与合成';
     this.toastTime = Math.max(0, this.toastTime - dt);
     this.q('#av-toast').classList.toggle('show', this.toastTime > 0);
     if (

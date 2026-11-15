@@ -78,11 +78,11 @@ test('three fixed danger bands contain ten reachable sites each and deterministi
       sites = worldSites(c);
     assert.equal(c.level.w, WORLD.width);
     assert.equal(c.level.h, WORLD.height);
-    assert.equal(sites.length, 30);
+    assert.equal(sites.length, 63);
     for (const region of Object.keys(REGIONS))
       assert.equal(
         sites.filter((s) => s.definition.region === region).length,
-        10,
+        ['vale', 'forest', 'sanctum'].includes(region) ? 11 : 10,
       );
     const seen = new Set<number>(),
       q = [
@@ -227,6 +227,8 @@ test('camp rests respect enemy proximity, repeated-rest time and active doubled 
     p = c.s.player.get(c.player)!;
   hp.hp = 20;
   p.mana = 10;
+  const sv = c.s.survival.get(c.player)!;
+  sv.fatigue = 0;
   const enemy = spawnRegionalMob(
     c,
     'shamble',
@@ -240,6 +242,7 @@ test('camp rests respect enemy proximity, repeated-rest time and active doubled 
   applyExplorationCommand(c, { type: 'interact' });
   assert.equal(hp.hp, hp.max);
   assert.equal(p.mana, p.maxMana);
+  assert.equal(sv.fatigue, 100);
   hp.hp = 40;
   applyExplorationCommand(c, { type: 'interact' });
   assert.equal(hp.hp, 40);
@@ -317,9 +320,9 @@ test('real stage-one save migrates to expanded world while preserving active inf
     old = record.data,
     loaded = restoreSave(record);
   assert.equal(record.version, 1);
-  assert.equal(loaded.level.w, 256);
-  assert.equal(loaded.level.h, 192);
-  assert.equal(worldSites(loaded).length, 30);
+  assert.equal(loaded.level.w, 512);
+  assert.equal(loaded.level.h, 384);
+  assert.equal(worldSites(loaded).length, 63);
   assert.equal(loaded.world.rng.getState(), old.world.rng);
   assert.equal(loaded.world.time, old.world.time);
   assert.deepEqual(
@@ -336,7 +339,7 @@ test('real stage-one save migrates to expanded world while preserving active inf
     if (entity.position)
       assert.deepEqual(loaded.world.pos(entity.id), entity.position);
   }
-  assert.equal(captureSave(loaded).version, 3);
+  assert.equal(captureSave(loaded).version, 6);
   assert.deepEqual(
     captureSave(restoreSave(captureSave(loaded))).data,
     captureSave(loaded).data,
@@ -355,7 +358,7 @@ test('real stage-one save migrates to expanded world while preserving active inf
     });
   assert.equal(repo.read(0).record!.version, 1);
   repo.write(0, captureSave(loaded));
-  assert.equal(repo.read(0).record!.version, 3);
+  assert.equal(repo.read(0).record!.version, 6);
 });
 
 test('distant monsters do not prevent local regional encounters from repopulating', () => {

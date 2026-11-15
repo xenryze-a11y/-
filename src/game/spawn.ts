@@ -1,4 +1,5 @@
 /** 组装一局：地图 + 玩家 + 亡者 + 场景物件。对应 goengine 的 game/ 组装层。 */
+import type { Journey } from './realm-data';
 import { World, type Entity } from '../engine/ecs';
 import { Level, TILE, Tile } from '../engine/level';
 import { makeRng, type Vec2 } from '../engine/math';
@@ -10,12 +11,12 @@ import {
   siteLocations,
   type SiteLocation,
 } from './world-layout';
-import { roadClearance } from './world-data';
+import { roadClearance, regionAt } from './world-data';
 import { initializeExploration } from './exploration-world';
 import { SANCTUARY, NPCS } from './sanctuary-data';
 import { GROVE } from './mage-data';
 import { spawnDrop } from './systems/loot';
-import { CFG } from './data';
+import { CFG, SURVIVAL } from './data';
 import {
   createProgress,
   ensureEquipmentInstances,
@@ -25,6 +26,7 @@ import {
 import { syncEquipment } from './inventory';
 
 export interface Scene {
+  journey?: Journey;
   world: World;
   s: Stores;
   level: Level;
@@ -169,6 +171,17 @@ export function buildScene(
     orbitTick: 0,
     orbitPhase: 0,
   });
+  s.survival.set(player, {
+    hunger: SURVIVAL.max,
+    thirst: SURVIVAL.max,
+    warmth: SURVIVAL.max,
+    heat: 0,
+    fatigue: SURVIVAL.max,
+    bleed: 0,
+    infection: 0,
+    dot: 0,
+    warned: 0,
+  });
 
   // 场景物件：静态贴图 + 圆形碰撞，注册进 Level 的 blockers。
   const props: {
@@ -216,6 +229,15 @@ export function buildScene(
   for (const def of props) {
     for (let i = 0; i < def.count; i++) {
       const p = findSpot(level, rng, 120, sites);
+      const region = regionAt(p),
+        sprite =
+          def.sprite === 'propTree'
+            ? region === 'waste' || region === 'highland'
+              ? 'propDeadTree'
+              : region === 'forest' || region === 'marsh'
+                ? 'propBlightTree'
+                : 'propTree'
+            : def.sprite;
       if (def.blocks) level.addBlocker(p.x, p.y, def.r);
       const e = world.createAt(
         [TAG.PROP, ...(def.blocks ? [TAG.DAMAGEABLE] : [])],
@@ -224,7 +246,7 @@ export function buildScene(
       );
       s.radius.set(e, { r: def.r || 6 });
       s.prop.set(e, {
-        sprite: def.sprite,
+        sprite,
         w: def.w,
         h: def.h,
         blocks: def.blocks,
@@ -234,7 +256,7 @@ export function buildScene(
         scale: 1,
         showHealth: false,
         animated: false,
-        staticSprite: def.sprite,
+        staticSprite: sprite,
       });
       if (def.blocks) s.health.set(e, { hp: 28, max: 28, armor: 0 });
     }

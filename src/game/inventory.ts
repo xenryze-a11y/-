@@ -1,7 +1,8 @@
 /** 背包属于模拟数据。界面只发命令，在组装层统一调用这些规则。 */
 import { isBlade } from './weapon-data';
 import { ARMOR_SLOTS } from './armor';
-import { ITEMS, INVENTORY, isSkill, type ItemId } from './items';
+import { ITEMS, INVENTORY, isSkill, itemWeight, type ItemId } from './items';
+import { SURVIVAL } from './data';
 import type { Ctx } from './systems/context';
 
 export interface ItemStack {
@@ -72,6 +73,13 @@ export function createInventory(
     slots[7] = { id: 'mana', count: 3 };
     slots[9] = { id: 'wood', count: 4 };
     slots[10] = { id: 'herb', count: 2 };
+    slots[11] = { id: 'rations', count: 3 };
+    slots[12] = { id: 'water', count: 3 };
+    slots[13] = { id: 'bandage', count: 2 };
+  } else {
+    slots[21] = { id: 'rations', count: 4 };
+    slots[22] = { id: 'water', count: 4 };
+    slots[23] = { id: 'bandage', count: 3 };
   }
   return {
     slots,
@@ -141,6 +149,18 @@ export function recipe(inv: InventoryState): ItemStack | null {
   if (items.length === 2 && counts.herb === 1 && counts.crystal === 1)
     return { id: 'mana', count: 2 };
   return null;
+}
+export function carriedWeight(inv: InventoryState): number {
+  let total = 0;
+  const add = (item: ItemStack | null): void => {
+    if (item) total += itemWeight(item.id) * item.count;
+  };
+  inv.slots.forEach(add);
+  inv.craft.forEach(add);
+  add(inv.boots);
+  Object.values(inv.armor).forEach(add);
+  add(inv.cursor);
+  return total;
 }
 export function notice(ctx: Ctx, text: string): void {
   const pos = ctx.world.pos(ctx.player);
@@ -335,6 +355,38 @@ export function useSelected(ctx: Ctx): void {
     inv.revision++;
     notice(ctx, '获得生命药水 ×1、法力药水 ×1');
     return;
+  } else if (item.id === 'rations') {
+    const sv = ctx.s.survival.get(ctx.player)!;
+    if (sv.hunger >= SURVIVAL.max) {
+      notice(ctx, '现在还不饿');
+      return;
+    }
+    sv.hunger = Math.min(SURVIVAL.max, sv.hunger + SURVIVAL.food.rations);
+    notice(ctx, `饱食 +${SURVIVAL.food.rations}`);
+  } else if (item.id === 'water') {
+    const sv = ctx.s.survival.get(ctx.player)!;
+    if (sv.thirst >= SURVIVAL.max) {
+      notice(ctx, '现在还不渴');
+      return;
+    }
+    sv.thirst = Math.min(SURVIVAL.max, sv.thirst + SURVIVAL.food.water);
+    notice(ctx, `水分 +${SURVIVAL.food.water}`);
+  } else if (item.id === 'bandage') {
+    const sv = ctx.s.survival.get(ctx.player)!;
+    if (sv.bleed <= 0) {
+      notice(ctx, '没有流血');
+      return;
+    }
+    sv.bleed = 0;
+    health.hp = Math.min(health.max, health.hp + SURVIVAL.food.bandageHeal);
+    notice(ctx, `止血 · 生命 +${SURVIVAL.food.bandageHeal}`);
+  } else if (item.id === 'herb') {
+    const sv = ctx.s.survival.get(ctx.player)!;
+    health.hp = Math.min(health.max, health.hp + SURVIVAL.food.herbHeal);
+    if (sv.infection > 0) {
+      sv.infection = 0;
+      notice(ctx, `感染退去 · 生命 +${SURVIVAL.food.herbHeal}`);
+    } else notice(ctx, `生命 +${SURVIVAL.food.herbHeal}`);
   } else return;
   if (--item.count === 0) inv.slots[inv.selected] = null;
   inv.revision++;

@@ -2,17 +2,18 @@
 import { CFG } from './data';
 import { TAG, type MobKind } from './components';
 import type { Scene } from './spawn';
-import { REGIONS, regionAt } from './world-data';
+import { REGIONS, regionAt, type RegionId } from './world-data';
 export function spawnRegionalMob(
   scene: Pick<Scene, 's' | 'world'>,
   kind: MobKind,
   x: number,
   y: number,
   site?: string,
+  region?: RegionId,
 ): number {
   const { world, s } = scene,
     cfg = CFG.mob[kind],
-    r = REGIONS[regionAt({ x, y })],
+    r = REGIONS[region || regionAt({ x, y })],
     id = world.createAt([TAG.MOB, TAG.DAMAGEABLE], x, y),
     hp = Math.round(cfg.hp * r.hp);
   s.radius.set(id, { r: cfg.radius });

@@ -40,3 +40,9 @@
 ## v3 四倍扩图与保存优化
 
 v3为256×192，CLIFF/STAIRS真实瓦片，worldVersion=3，支持30地点/6界石；v1/v2完整恢复后再扩图，原坐标、实体、奖励和装备保留。原本地键不变。writeScene仅用于本游戏同步捕获并已校验的快照，外部JSON仍走parseSave/restoreSave/write。验证缓存以原始存储字符串为键，读取返回独立JSON副本；外部改记录不会污染缓存。失败写入不能更新缓存，也不能挤掉旧备份。详见 [景观与性能](LANDSCAPES_AND_PERFORMANCE.md)。
+
+## v4 六域与独立地下城
+
+v4主世界512×384、worldVersion=4；progress.zone为overworld/mine/roots/jail，休眠地图放在SaveData.journey.layers，returnAt与returnTracked保留返回位置和原追踪。当前角色只在活动世界存在，休眠世界完全删除玩家实体和组件；导入对每层注入唯一角色进行完整隔离验证，拒绝活动层重复/未知层/角色副本/缺失返回地图。
+
+serializeSave在本地槽与导出时将每层tiles/southWalls编码为rle1，parseSave先做有界解压，再验证完整数据的原校验码，返回普通SaveRecord。captureSave与模拟仍使用原数组。读取缓存返回正常快照，备份也压缩，失败写入保留旧档。文件上限8MB，解压每层不超过512×384格、至多三休眠层，实际层尺寸严格校验为主世界或80×80。v1–v3完整恢复后再扩图；原槽位键保持不变。细节及回归见 [六域远征](ARPG_EXPEDITION.md)。
