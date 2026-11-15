@@ -227,6 +227,8 @@ test('camp rests respect enemy proximity, repeated-rest time and active doubled 
     p = c.s.player.get(c.player)!;
   hp.hp = 20;
   p.mana = 10;
+  const sv = c.s.survival.get(c.player)!;
+  sv.fatigue = 0;
   const enemy = spawnRegionalMob(
     c,
     'shamble',
@@ -240,6 +242,7 @@ test('camp rests respect enemy proximity, repeated-rest time and active doubled 
   applyExplorationCommand(c, { type: 'interact' });
   assert.equal(hp.hp, hp.max);
   assert.equal(p.mana, p.maxMana);
+  assert.equal(sv.fatigue, 100);
   hp.hp = 40;
   applyExplorationCommand(c, { type: 'interact' });
   assert.equal(hp.hp, 40);
@@ -336,7 +339,7 @@ test('real stage-one save migrates to expanded world while preserving active inf
     if (entity.position)
       assert.deepEqual(loaded.world.pos(entity.id), entity.position);
   }
-  assert.equal(captureSave(loaded).version, 4);
+  assert.equal(captureSave(loaded).version, 6);
   assert.deepEqual(
     captureSave(restoreSave(captureSave(loaded))).data,
     captureSave(loaded).data,
@@ -355,7 +358,7 @@ test('real stage-one save migrates to expanded world while preserving active inf
     });
   assert.equal(repo.read(0).record!.version, 1);
   repo.write(0, captureSave(loaded));
-  assert.equal(repo.read(0).record!.version, 4);
+  assert.equal(repo.read(0).record!.version, 6);
 });
 
 test('distant monsters do not prevent local regional encounters from repopulating', () => {

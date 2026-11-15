@@ -3,6 +3,7 @@ import { World, type WorldSnapshot } from '../engine/ecs';
 import { Level, type LevelSnapshot } from '../engine/level';
 import { createStores, C, TAG } from './components';
 import { ITEMS } from './items';
+import { SURVIVAL } from './data';
 import { createProgress } from './adventure';
 import { initializeExploration } from './exploration-world';
 import { mergeHero } from './realm-travel';
@@ -11,7 +12,7 @@ import { SITES, WORLD } from './world-data';
 import { ensureEquipmentInstances, type AdventureProgress } from './adventure';
 import type { Scene } from './spawn';
 
-export const SAVE_VERSION = 4;
+export const SAVE_VERSION = 6;
 export const SAVE_LIMIT = 8_000_000;
 export const SAVE_PREFIX = 'ashen-vale.save.v1.';
 export interface SaveData {
@@ -100,7 +101,7 @@ const nums = (names: string): Record<string, Check> =>
 const vec = shape(nums('x y'));
 const ids = array(uint, 5000);
 const itemId = one(...Object.keys(ITEMS));
-const armorMat = one('none', 'leather', 'iron', 'sanctum');
+const armorMat = one('none', 'leather', 'iron', 'sanctum', 'fur');
 const element = one('ember', 'frost', 'storm', 'ward', 'blink');
 const cooldowns = shape(nums('field wave barrage'));
 const profession = shape({ unlocked: bool, cooldowns });
@@ -117,6 +118,10 @@ const stack: Check = (v) =>
     (v.count as number) > 0 &&
     (v.count as number) <= ITEMS[v.id as keyof typeof ITEMS].stack);
 const schema: Record<string, Check> = {
+  [C.SURVIVAL]: shape({
+    ...nums('hunger thirst warmth fatigue bleed infection dot warned'),
+    heat: optional(number),
+  }),
   [C.RADIUS]: shape(nums('r')),
   [C.HEALTH]: shape(nums('hp max armor')),
   [C.FACING]: shape(nums('angle')),
@@ -277,11 +282,15 @@ function validate(
       level: object,
       player: uint,
       progress: object,
-      ...(version >= 4 ? { journey: optional(object) } : {}),
+      journey: optional(object),
     })(data)
   )
     fail('存档结构不完整');
   const d = data as SaveData;
+  // 共创 v4/v5 是 256×192 生存版；六域 v4 则有 zone/worldVersion=4。
+  const expedition =
+    version >= 6 || (version === 4 && d.progress.worldVersion === 4);
+  const survival = version >= 5 || (version === 4 && !expedition);
   if (
     !shape({
       seed: (v) =>
@@ -295,7 +304,7 @@ function validate(
       nextEquipmentId: uint,
       nextRespawn: number,
       explored: array(key, 20000),
-      ...(version >= 4
+      ...(expedition
         ? { zone: one('overworld', 'mine', 'roots', 'jail') }
         : {}),
       openedChests: array(key),
@@ -304,7 +313,7 @@ function validate(
       ...(version === 1
         ? {}
         : {
-            worldVersion: one(version === 2 ? 2 : version === 3 ? 3 : 4),
+            worldVersion: one(version === 2 ? 2 : expedition ? 4 : 3),
             discovered: array(one(...SITES.map((s) => s.id)), SITES.length),
             waypoints: array(
               one(
@@ -337,7 +346,7 @@ function validate(
       ? 96
       : version === 2
         ? 128
-        : version === 3
+        : !expedition
           ? 256
           : d.progress.zone === 'overworld'
             ? WORLD.width
@@ -347,7 +356,7 @@ function validate(
       ? 72
       : version === 2
         ? 96
-        : version === 3
+        : !expedition
           ? 192
           : d.progress.zone === 'overworld'
             ? WORLD.height
@@ -403,7 +412,10 @@ function validate(
     )
       fail('实体位置越界');
   }
-  if (Object.keys(d.world.stores).length !== Object.keys(schema).length)
+  if (
+    Object.keys(d.world.stores).length !==
+    Object.keys(schema).length - (survival ? 0 : 1)
+  )
     fail('组件版本不匹配');
   for (const [name, entries] of Object.entries(d.world.stores)) {
     const check = schema[name];
@@ -432,6 +444,7 @@ function validate(
     C.JOURNAL,
     C.MAGE,
     C.BLADE,
+    ...(survival ? [C.SURVIVAL] : []),
   ])
     if (!value(name)) fail('缺失角色组件');
   if (
@@ -458,6 +471,18 @@ function validate(
     p.mana > p.maxMana
   )
     fail('角色生命或法力无效');
+  const sv = s.survival.get(d.player);
+  if (
+    sv &&
+    ([sv.hunger, sv.thirst, sv.warmth, sv.heat ?? 0, sv.fatigue].some(
+      (v) => v < 0 || v > SURVIVAL.max,
+    ) ||
+      sv.bleed < 0 ||
+      sv.infection < 0 ||
+      sv.dot < 0 ||
+      sv.warned < 0)
+  )
+    fail('生存状态无效');
   const blade = s.blade.get(d.player)!;
   if (blade.infernoVitality !== blade.infernoLeft > 0)
     fail('火焰护体状态不一致');
@@ -597,7 +622,7 @@ function validate(
     }
     if (d.progress.zone !== 'overworld' && !d.journey.layers.overworld)
       fail('地下城缺失返回地图');
-  } else if (version >= 4 && layers && d.progress.zone !== 'overworld')
+  } else if (expedition && layers && d.progress.zone !== 'overworld')
     fail('地下城缺失旅程数据');
 }
 
@@ -632,7 +657,8 @@ export function parseSave(raw: string): SaveRecord {
     fail('文件不是有效的 JSON 存档');
   }
   if (object(record) && record.levelEncoding === 'rle1') {
-    if (record.version !== 4 || !object(record.data)) fail('压缩格式无效');
+    if (![4, 6].includes(record.version as number) || !object(record.data))
+      fail('压缩格式无效');
     inflateLevels(record.data);
     delete record.levelEncoding;
   }
@@ -642,13 +668,15 @@ export function parseSave(raw: string): SaveRecord {
     record.version !== 1 &&
     record.version !== 2 &&
     record.version !== 3 &&
+    record.version !== 4 &&
+    record.version !== 5 &&
     record.version !== SAVE_VERSION
   )
     fail('存档版本不兼容，请使用对应版本的游戏');
   if (
     !shape({
       format: one('ashen-vale'),
-      version: one(1, 2, 3, SAVE_VERSION),
+      version: one(1, 2, 3, 4, 5, SAVE_VERSION),
       savedAt: text,
       checksum: text,
       data: object,
@@ -685,7 +713,26 @@ export function restoreSave(record: SaveRecord): Scene {
           }
         : structuredClone(data.progress),
   };
-  if (record.version < 4) scene.progress.zone = 'overworld';
+  if (!scene.progress.zone) scene.progress.zone = 'overworld';
+  if (data.journey)
+    Object.assign(scene, { journey: structuredClone(data.journey) });
+  if (!s.survival.has(data.player))
+    s.survival.set(data.player, {
+      hunger: 100,
+      thirst: 100,
+      warmth: 100,
+      heat: 0,
+      fatigue: 100,
+      bleed: 0,
+      infection: 0,
+      dot: 0,
+      warned: 0,
+    });
+  const sv = s.survival.get(data.player)!;
+  if (typeof sv.heat !== 'number') sv.heat = 0;
+  // 休眠层不含角色，只补空的组件表，跨图时再移入唯一玩家状态。
+  for (const layer of Object.values(data.journey?.layers ?? {}))
+    layer.world.stores[C.SURVIVAL] ??= [];
   if (data.journey)
     Object.assign(scene, { journey: structuredClone(data.journey) });
   if (scene.progress.zone === 'overworld') initializeExploration(scene);

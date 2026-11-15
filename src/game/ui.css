@@ -103,6 +103,75 @@ button:focus-visible {
 .av-bar.mana i {
   background: linear-gradient(90deg, #3f6b88, #7db2b5);
 }
+/* 生存四条：细条 + 低值变红。位置就在生命 / 法力下面，不另开一扇悬浮框。 */
+.av-survival {
+  margin-top: 8px;
+  padding-top: 7px;
+  border-top: 1px solid #6b786433;
+}
+.av-survival-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 4px;
+}
+.av-survival-row > span {
+  width: 30px;
+  flex: none;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #93a18c;
+}
+.av-mini {
+  flex: 1;
+  height: 5px;
+  background: #071512;
+  border: 1px solid #82917844;
+}
+.av-mini i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: #c9a06a;
+  transition: width 0.2s;
+}
+.av-survival-row[data-stat='thirst'] .av-mini i {
+  background: #7db2b5;
+}
+.av-survival-row[data-stat='warmth'] .av-mini i {
+  background: #d08a5a;
+}
+.av-survival-row[data-stat='fatigue'] .av-mini i {
+  background: #a9c08a;
+}
+.av-survival-row[data-stat='heat'] .av-mini i {
+  background: #d0684a;
+}
+.av-survival-row.low .av-mini i {
+  background: #c0564a;
+}
+.av-survival-row.low > span {
+  color: #e08a7a;
+}
+#av-ailments {
+  min-height: 13px;
+  margin-top: 4px;
+  font-size: 10px;
+  line-height: 1.45;
+  color: #efac7f;
+}
+#av-climate {
+  min-height: 13px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: #9fb4c4;
+}
+#av-climate.cold {
+  color: #9ac4e0;
+}
+#av-climate.hot {
+  color: #efac7f;
+}
 .av-values {
   display: flex;
   justify-content: space-between;

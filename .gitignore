@@ -6,3 +6,9 @@ dist-standalone/
 .vite/
 
 /dist-hosted/
+.kair/
+# 出图产物由 `npm run shot` 生成，不入库（保留 RENDERING.md 里的说明即可）
+docs/shots/parts/
+docs/shots/*.png
+
+/node_modules

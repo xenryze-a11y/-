@@ -44,6 +44,8 @@ import { GROVE } from './game/mage-data';
 import type { MageSkillId } from './game/mage-data';
 import { updateSummons } from './game/systems/basketball';
 import { updateRules } from './game/systems/rules';
+import { updateSurvival } from './game/systems/survival';
+import { createDeathRecovery } from './game/death-stash';
 import type { Ctx } from './game/systems/context';
 
 async function boot(): Promise<void> {
@@ -130,7 +132,8 @@ async function boot(): Promise<void> {
     lastSavedWall = 0,
     lastSaveError = '',
     lastSavedAt = '',
-    combatUntilWall = 0;
+    combatUntilWall = 0,
+    deathSaveAttempted = false;
   function processCommands(): void {
     if (commands.some((c) => c.type !== 'select')) dirty = true;
     for (const command of commands.splice(0))
@@ -170,6 +173,7 @@ async function boot(): Promise<void> {
   }
   function installScene(next: Scene): void {
     scene = next;
+    deathSaveAttempted = false;
     ctx = makeCtx(scene);
     view.setScene(scene);
     present.clear();
@@ -189,6 +193,7 @@ async function boot(): Promise<void> {
     lastSaveError = '';
     lastSavedAt = '';
     if (ctx.s.inventory.get(ctx.player)!.cursor) ui.setInventory(true);
+
   }
   function restart(grove = false): void {
     checkpoint();
@@ -448,6 +453,7 @@ async function boot(): Promise<void> {
         updateBlades(ctx, _fixed);
         updateSummons(ctx, _fixed);
         updateRules(ctx);
+        updateSurvival(ctx, _fixed);
         ctx.world.flush();
         ensureEquipmentInstances(ctx);
       });
@@ -479,6 +485,16 @@ async function boot(): Promise<void> {
       )
     )
       combatUntilWall = performance.now() + 1500;
+    if (ctx.gameOver && activeSlot !== null && !deathSaveAttempted) {
+      deathSaveAttempted = true;
+      try {
+        const record = saves.writeScene(activeSlot, createDeathRecovery(scene));
+        lastSavedAt = record.savedAt;
+        ui.toast('复苏点已保存 · 部分物资留在倒下的位置，继续冒险可找回');
+      } catch {
+        ui.toast('复苏点保存失败 · 继续冒险将返回上个有效存档');
+      }
+    }
     present.consume(events);
     ui.consume(events);
     camera.w = app.screen.width;

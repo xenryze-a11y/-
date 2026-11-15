@@ -182,7 +182,7 @@ test('three persistent dungeons carry one hero, preserve drops and prevent repea
   c.s.player.get(hero)!.mana -= 1;
   repo.writeScene(0, c);
   assert(storage.get(SAVE_PREFIX + '0')!.length < 2_400_000);
-  assert.equal(repo.read(0).record!.version, 4);
+  assert.equal(repo.read(0).record!.version, 6);
 });
 test('fog namespaces, guarded outpost activation and portal combat restrictions are real rules', () => {
   const c = context();

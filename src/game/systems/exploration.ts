@@ -357,8 +357,10 @@ export function applyExplorationCommand(
       player = ctx.s.player.get(ctx.player)!;
     hp.hp = hp.max;
     player.mana = player.maxMana;
+    const survival = ctx.s.survival.get(ctx.player);
+    if (survival) survival.fatigue = 100;
     p.campReadyAt = ctx.world.time + 30;
-    notice(ctx, '在 ' + d.name + ' 歇息 · 生命与法力恢复');
+    notice(ctx, '在 ' + d.name + ' 歇息 · 生命、法力与精力恢复');
     return {};
   }
   const inv = ctx.s.inventory.get(ctx.player)!,

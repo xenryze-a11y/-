@@ -139,6 +139,66 @@ export const CFG = {
   view: { w: 0, h: 0 },
 };
 
+/**
+ * 生存机制的全部数值。规则在 systems/survival.ts，这里只放数据。
+ * 四条状态都是 0–100：越高越好；归零后掉血而不是直接死亡，给玩家反应时间。
+ */
+export const SURVIVAL = {
+  max: 100,
+  /** 自然消耗（每秒）。约 10 分钟饿到底、6 分钟渴到底、25 分钟疲惫到底。 */
+  hungerPerSec: 100 / 600,
+  thirstPerSec: 100 / 360,
+  fatiguePerSec: 100 / 1500,
+  /** 一昼夜秒数与夜晚起点；气温本身在 climate.ts。 */
+  dayLength: 120,
+  nightStart: 0.55,
+  /** 低于这些值开始受影响。 */
+  hungerSlow: 25,
+  thirstSlow: 20,
+  coldSlow: 30,
+  exhaustionSlow: 25,
+  heatSlow: 70,
+  /** 行动倍率。 */
+  hungerSpeed: 0.88,
+  thirstSpeed: 0.9,
+  coldSpeed: 0.85,
+  heatSpeed: 0.85,
+  infectionSpeed: 0.9,
+  infectionAttack: 0.9,
+  exhaustionAttack: 0.78,
+  exhaustionDodge: 0.7,
+  /** 归零后的持续掉血（每秒）。 */
+  starveDps: 1.4,
+  dehydrateDps: 2.2,
+  freezeDps: 2.6,
+  heatDps: 2.4,
+  bleedDps: 1.6,
+  infectionDps: 0.9,
+  /** 受击获得负面状态的概率与持续秒数。 */
+  bleedChance: 0.16,
+  bleedLife: 6,
+  infectionChance: 0.08,
+  infectionLife: 18,
+  /** 负重阈值与对应倍率；重量由 inventory.carriedWeight 计算。 */
+  weight: {
+    heavy: 60,
+    crushing: 100,
+    maxed: 130,
+    heavySpeed: 0.92,
+    crushingSpeed: 0.82,
+    maxedSpeed: 0.7,
+    heavyDodge: 0.9,
+    crushingDodge: 0.78,
+    maxedDodge: 0.6,
+    crushingFatigue: 1.5,
+    maxedFatigue: 2,
+  },
+  /** 直接使用生存物资的恢复量。 */
+  food: { rations: 45, water: 50, bandageHeal: 8, herbHeal: 6 },
+  /** 警告提示的最短间隔，避免每帧弹字。 */
+  noticeEvery: 3,
+} as const;
+
 /** 序列帧只给特效用；走路是相位，不进这张表。 */
 export const FX_ANIMS: Record<string, FxAnim> = {
   slash: {

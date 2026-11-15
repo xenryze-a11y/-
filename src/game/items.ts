@@ -3,7 +3,8 @@ export type SkillId = 'ember' | 'frost' | 'storm' | 'ward' | 'blink';
 export type AbilityId = SkillId | 'basketball';
 export type ArmorItemId =
   | `${'iron' | 'leather' | 'sanctum'}_${'head' | 'chest' | 'legs'}`
-  | 'sanctum_boots';
+  | 'sanctum_boots'
+  | 'fur_chest';
 export type ItemId =
   | 'scythe'
   | 'sabre'
@@ -21,7 +22,10 @@ export type ItemId =
   | 'herb'
   | 'crate'
   | 'leather'
-  | 'iron';
+  | 'iron'
+  | 'rations'
+  | 'water'
+  | 'bandage';
 export interface ItemDefinition {
   name: string;
   kind:
@@ -35,9 +39,12 @@ export interface ItemDefinition {
     | 'material'
     | 'supply'
     | 'boots'
-    | 'armor';
+    | 'armor'
+    | 'food'
+    | 'drink'
+    | 'medical';
   armorSlot?: 'head' | 'chest' | 'legs';
-  armorMat?: 'leather' | 'iron' | 'sanctum';
+  armorMat?: 'leather' | 'iron' | 'sanctum' | 'fur';
   stack: number;
   color: string;
   desc: string;
@@ -147,6 +154,15 @@ ARMOR_ITEMS.sanctum_boots = {
   stack: 1,
   color: '#e4d49a',
   desc: '晨曦套装的靴子；四件齐全时每秒额外恢复 2 法力。',
+};
+ARMOR_ITEMS.fur_chest = {
+  name: '毛皮斗篷',
+  kind: 'armor',
+  stack: 1,
+  color: '#b08f68',
+  armorSlot: 'chest',
+  armorMat: 'fur',
+  desc: '厚毛皮斗篷，几乎不减伤，但能把舒适温度压到零下。冬夜外出的唯一解。',
 };
 export const ITEMS: Record<ItemId, ItemDefinition> = {
   ...ARMOR_ITEMS,
@@ -290,7 +306,75 @@ export const ITEMS: Record<ItemId, ItemDefinition> = {
     color: '#c0cbd1',
     desc: '装备后受到的伤害降低 2 点。',
   },
+  rations: {
+    name: '干粮',
+    kind: 'food',
+    stack: 16,
+    color: '#c9a06a',
+    desc: '使用恢复 45 点饱食。放久不易腐坏，是远行的基础。',
+  },
+  water: {
+    name: '清水',
+    kind: 'drink',
+    stack: 16,
+    color: '#8fc4d8',
+    desc: '使用恢复 50 点水分。比药水更重的补给。',
+  },
+  bandage: {
+    name: '绷带',
+    kind: 'medical',
+    stack: 16,
+    color: '#ddd3bd',
+    desc: '使用止住流血并恢复 8 点生命。',
+  },
 };
+
+/** 未列出的物品按这个重量计。 */
+export const DEFAULT_ITEM_WEIGHT = 0.3;
+/**
+ * 单件重量，负重按堆叠数量累计（见 SURVIVAL 与 inventory.carriedWeight）。
+ * 单独列表而不是塞进 ItemDefinition：重量是生存机制的规则数据，改它不该顺手改物品内容。
+ */
+export const ITEM_WEIGHT: Partial<Record<ItemId, number>> = {
+  wood: 0.12,
+  planks: 0.12,
+  stone: 0.18,
+  crystal: 0.04,
+  herb: 0.02,
+  leather: 1.2,
+  iron: 1.8,
+  health: 0.08,
+  mana: 0.08,
+  crate: 0.4,
+  rations: 0.2,
+  water: 0.25,
+  bandage: 0.04,
+  basketball: 1,
+  sword: 3,
+  ember: 2,
+  frost: 2,
+  storm: 2,
+  ward: 2,
+  blink: 2,
+  scythe: 4,
+  sabre: 2.5,
+  greatsword: 5,
+  leather_head: 2,
+  leather_chest: 2.4,
+  leather_legs: 2.2,
+  iron_head: 3,
+  iron_chest: 3.6,
+  iron_legs: 3.2,
+  sanctum_head: 2.2,
+  sanctum_chest: 2.6,
+  sanctum_legs: 2.4,
+  sanctum_boots: 1,
+  fur_chest: 2.8,
+};
+export function itemWeight(id: ItemId): number {
+  return ITEM_WEIGHT[id] ?? DEFAULT_ITEM_WEIGHT;
+}
+
 export const SKILLS: Record<SkillId, SkillDefinition> = {
   ember: { name: '三重炎矢', cost: 24, cd: 1.3, baseCost: 9, baseCd: 0.36 },
   frost: { name: '冰霜新星', cost: 26, cd: 4.5, baseCost: 8, baseCd: 0.42 },

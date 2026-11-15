@@ -97,7 +97,7 @@ export function mergeHero(
   out.entities.push({ ...structuredClone(hero), position: { ...at } });
   for (const [name, entries] of Object.entries(source.stores)) {
     const entry = entries.find((e) => e.id === player);
-    if (entry) out.stores[name].push(structuredClone(entry));
+    if (entry) (out.stores[name] ??= []).push(structuredClone(entry));
   }
   out.time = source.time;
   out.nextId = Math.max(out.nextId, player + 1);
