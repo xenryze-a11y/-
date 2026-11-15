@@ -1,6 +1,6 @@
 # 生存机制
 
-四条状态 + 两种负面状态 + 负重。数值全在 `src/game/data.ts` 的 `SURVIVAL`，规则在 `src/game/systems/survival.ts`，HUD 只读。决策见 [DECISIONS.md](DECISIONS.md) D46。
+四条状态 + 两种负面状态 + 负重。数值全在 `src/game/data.ts` 的 `SURVIVAL`，规则在 `src/game/systems/survival.ts`，HUD 只读。决策见 [DECISIONS.md](DECISIONS.md) D47。
 
 ## 四条状态（0–100，越高越好）
 

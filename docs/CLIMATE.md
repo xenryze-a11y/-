@@ -2,7 +2,7 @@
 
 第 1 批：季节气温 + 衣物保暖 / 耐热。规则在 `src/game/climate.ts`（算温度）与
 `src/game/systems/survival.ts`（把温度换算成状态），数值在 `data.ts` 的 `SURVIVAL` /
-`climate.ts` 的 `SEASONS` / `CLIMATE`，衣物属性在 `armor.ts`。决策见 [DECISIONS.md](DECISIONS.md) D47。
+`climate.ts` 的 `SEASONS` / `CLIMATE`，衣物属性在 `armor.ts`。决策见 [DECISIONS.md](DECISIONS.md) D48。
 
 ## 核心公式
 
